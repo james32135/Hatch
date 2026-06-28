@@ -1,0 +1,53 @@
+{
+  "name": "@hatch/backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "start": "node dist/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:deploy": "prisma migrate deploy",
+    "prisma:studio": "prisma studio",
+    "smoke": "tsx scripts/smoke-backend.ts",
+    "migrate:apply-init": "node scripts/apply-init-migration.mjs",
+    "valuechain:prep": "node scripts/valuechain-deploy-prep.mjs",
+    "validate:render": "node scripts/validate-render.mjs"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.111.0",
+    "@fastify/cors": "^11.3.0",
+    "@fastify/helmet": "^13.1.0",
+    "@fastify/jwt": "^10.2.0",
+    "@fastify/rate-limit": "^11.1.0",
+    "@fastify/sensible": "^6.0.4",
+    "@prisma/adapter-pg": "^7.8.0",
+    "@prisma/client": "^7.8.0",
+    "@upstash/redis": "^1.38.0",
+    "bullmq": "^5.80.1",
+    "dotenv": "^17.4.2",
+    "fastify": "^5.10.0",
+    "ioredis": "^5.11.1",
+    "openai": "^6.46.0",
+    "pg": "^8.22.0",
+    "pino": "^10.3.1",
+    "siwe": "^3.0.0",
+    "viem": "^2.55.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/pg": "^8.20.0",
+    "prisma": "^7.8.0",
+    "tsx": "^4.23.0",
+    "typescript": "^5.8.0",
+    "vitest": "^4.1.10"
+  }
+}

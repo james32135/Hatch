@@ -1,0 +1,11 @@
+flowchart LR
+  Parent[Parent Wallet] -->|SIWE JWT| API[HATCH Fastify API]
+  Child[Child View-Only] -->|Scoped JWT| API
+  API -->|x-soso-api-key| Soso[SoSoValue OpenAPI]
+  API -->|EIP-712 relay| SoDEX[SoDEX Spot GW]
+  API -->|viem| Base[Base RPC SSI tokens]
+  API -->|viem| VC[ValueChain EVM]
+  API --> PG[(Render PostgreSQL)]
+  API --> Redis[(Upstash Redis)]
+  SoDEX --> Vault[sMAG7 Vault dual yield]
+  VC --> Log[HATCHLog]

@@ -1,0 +1,21 @@
+{
+  "name": "hatch",
+  "private": true,
+  "version": "0.1.0",
+  "description": "HATCH — Your Child's First Portfolio. Built Automatically.",
+  "workspaces": [
+    "packages/backend",
+    "packages/web"
+  ],
+  "scripts": {
+    "dev:backend": "npm run dev -w @hatch/backend",
+    "build:backend": "npm run build -w @hatch/backend",
+    "test:backend": "npm run test -w @hatch/backend",
+    "prisma:generate": "npm run prisma:generate -w @hatch/backend",
+    "prisma:migrate": "npm run prisma:migrate -w @hatch/backend"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "npm@10"
+}

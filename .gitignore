@@ -1,0 +1,67 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+**/node_modules/
+
+# Build / coverage / cache
+dist/
+build/
+coverage/
+.next/
+out/
+.turbo/
+.cache/
+*.tsbuildinfo
+packages/contracts/cache/
+packages/contracts/out/
+packages/contracts/broadcast/
+packages/contracts/lib/
+
+# Env / secrets — NEVER commit
+.env
+.env.*
+!.env.example
+!**/.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+credentials.json
+secrets/
+**/secrets/
+
+# Logs / local DB
+*.log
+logs/
+npm-debug.log*
+yarn-error.log*
+*.sqlite
+*.sqlite3
+*.db
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Docs — README.md only (all other markdown private/local)
+*.md
+!README.md
+!**/README.md
+
+# Agent / local tracking (also covered by *.md)
+MEMORY.md
+PROGRESS.md
+NEXT_TASK.md
+
+# Misc generated
+tmp/
+temp/
+.nyc_output/
+
+# CI workflows require GitHub token workflow scope to push
+.github/
+

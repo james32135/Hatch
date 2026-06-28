@@ -1,0 +1,196 @@
+// HATCH Prisma schema — Supabase PostgreSQL (or any Postgres)
+// Phase 1: npx prisma migrate deploy
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  // Prisma 7: connection URL lives in prisma.config.ts (not here)
+}
+
+enum RiskTier {
+  CONSERVATIVE
+  BALANCED
+  GROWTH
+}
+
+enum EnvironmentProfile {
+  MAINNET
+  TESTNET
+  MAINNET_READONLY
+}
+
+enum OrderRelayStatus {
+  PENDING
+  SUBMITTED
+  FILLED
+  PARTIAL
+  REJECTED
+  FAILED
+}
+
+enum LessonStatus {
+  PENDING
+  READY
+  FAILED
+}
+
+model User {
+  id                      String   @id @default(cuid())
+  walletAddress           String   @unique @map("wallet_address")
+  /// Cached SoDEX accountID from GET /accounts/{address}/state — never a global platform ID
+  sodexAccountIdMainnet   Int?     @map("sodex_account_id_mainnet")
+  sodexAccountIdTestnet   Int?     @map("sodex_account_id_testnet")
+  createdAt               DateTime @default(now()) @map("created_at")
+  updatedAt               DateTime @updatedAt @map("updated_at")
+
+  children          Child[]
+  allowancePolicies AllowancePolicy[]
+  signedOrders      SignedOrder[]
+
+  @@map("users")
+}
+
+model AuthNonce {
+  id            String   @id @default(cuid())
+  walletAddress String   @map("wallet_address")
+  nonce         String
+  expiresAt     DateTime @map("expires_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([walletAddress])
+  @@map("auth_nonces")
+}
+
+model Child {
+  id           String    @id @default(cuid())
+  parentId     String    @map("parent_id")
+  displayName  String    @map("display_name")
+  ageYears     Int       @map("age_years")
+  readingLevel Int       @default(1) @map("reading_level")
+  riskTier     RiskTier @default(BALANCED) @map("risk_tier")
+  paused       Boolean   @default(false)
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  parent            User              @relation(fields: [parentId], references: [id], onDelete: Cascade)
+  allowancePolicies AllowancePolicy[]
+  snapshots         PortfolioSnapshot[]
+  lessons           Lesson[]
+  signedOrders      SignedOrder[]
+
+  @@index([parentId])
+  @@map("children")
+}
+
+model AllowancePolicy {
+  id              String    @id @default(cuid())
+  childId         String    @map("child_id")
+  parentId        String    @map("parent_id")
+  amountUsd       Decimal   @map("amount_usd") @db.Decimal(18, 6)
+  cadenceDays     Int       @default(7) @map("cadence_days")
+  riskTier        RiskTier @map("risk_tier")
+  maxSlippageBps  Int       @default(50) @map("max_slippage_bps")
+  paused          Boolean   @default(false)
+  nextDueAt       DateTime? @map("next_due_at")
+  policyHash      String?   @map("policy_hash")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  child  Child @relation(fields: [childId], references: [id], onDelete: Cascade)
+  parent User  @relation(fields: [parentId], references: [id], onDelete: Cascade)
+
+  @@index([nextDueAt])
+  @@index([childId])
+  @@map("allowance_policies")
+}
+
+model PortfolioSnapshot {
+  id              String              @id @default(cuid())
+  childId         String              @map("child_id")
+  environment     EnvironmentProfile  @default(MAINNET)
+  totalUsd        Decimal?            @map("total_usd") @db.Decimal(18, 6)
+  mag7Qty         Decimal?            @map("mag7_qty") @db.Decimal(36, 18)
+  ussiQty         Decimal?            @map("ussi_qty") @db.Decimal(36, 18)
+  smag7Qty        Decimal?            @map("smag7_qty") @db.Decimal(36, 18)
+  rawBalancesJson Json                @map("raw_balances_json")
+  source          String              @default("sodex")
+  createdAt       DateTime            @default(now()) @map("created_at")
+
+  child Child @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@index([childId, createdAt])
+  @@map("portfolio_snapshots")
+}
+
+model Lesson {
+  id           String       @id @default(cuid())
+  childId      String       @map("child_id")
+  status       LessonStatus @default(PENDING)
+  title        String
+  body         String
+  readingLevel Int          @map("reading_level")
+  citationsJson Json        @map("citations_json")
+  triggerDelta Decimal?     @map("trigger_delta") @db.Decimal(18, 8)
+  model        String?
+  error        String?
+  createdAt    DateTime     @default(now()) @map("created_at")
+
+  child Child @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@index([childId, createdAt])
+  @@map("lessons")
+}
+
+model SignedOrder {
+  id              String              @id @default(cuid())
+  parentId        String              @map("parent_id")
+  childId         String?             @map("child_id")
+  environment     EnvironmentProfile
+  clOrdId         String              @map("cl_ord_id")
+  symbolId        Int                 @map("symbol_id")
+  symbolName      String              @map("symbol_name")
+  side            String
+  quantity        String
+  price           String
+  payloadHash     String              @map("payload_hash")
+  nonce           String
+  signature       String
+  status          OrderRelayStatus    @default(PENDING)
+  sodexOrderId    String?             @map("sodex_order_id")
+  sodexResponseJson Json?             @map("sodex_response_json")
+  error           String?
+  createdAt       DateTime            @default(now()) @map("created_at")
+  updatedAt       DateTime            @updatedAt @map("updated_at")
+
+  parent User   @relation(fields: [parentId], references: [id], onDelete: Cascade)
+  child  Child? @relation(fields: [childId], references: [id], onDelete: SetNull)
+
+  @@unique([environment, clOrdId])
+  @@index([parentId, createdAt])
+  @@map("signed_orders")
+}
+
+model SystemEvent {
+  id        String   @id @default(cuid())
+  kind      String
+  payload   Json
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([kind, createdAt])
+  @@map("system_events")
+}
+
+model AgentLog {
+  id        String   @id @default(cuid())
+  agent     String
+  childId   String?  @map("child_id")
+  ok        Boolean
+  detail    Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([agent, createdAt])
+  @@map("agent_logs")
+}

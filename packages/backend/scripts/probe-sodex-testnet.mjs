@@ -1,0 +1,16 @@
+import { config } from "dotenv";
+import { resolve } from "path";
+config({ path: resolve("../../.env") });
+const base = "https://testnet-gw.sodex.dev/api/v1/spot";
+const addr = process.env.SODEX_ADDRESS.replace(/"/g, "");
+const r = await fetch(`${base}/markets/symbols`);
+const j = await r.json();
+const list = Array.isArray(j) ? j : j.data || j.symbols || [];
+console.log("symbols status", r.status, "n", Array.isArray(list) ? list.length : typeof list);
+const sample = (Array.isArray(list) ? list : []).slice(0, 3);
+console.log(JSON.stringify(sample, null, 2).slice(0, 1500));
+const st = await fetch(`${base}/accounts/${addr.toLowerCase()}/state`);
+const text = await st.text();
+console.log("state", st.status, text.slice(0, 800));
+const bal = await fetch(`${base}/accounts/${addr.toLowerCase()}/balances`);
+console.log("balances", bal.status, (await bal.text()).slice(0, 500));

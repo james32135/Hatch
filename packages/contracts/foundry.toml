@@ -1,0 +1,14 @@
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+solc = "0.8.28"
+optimizer = true
+optimizer_runs = 200
+
+[rpc_endpoints]
+valuechain_mainnet = "${VALUECHAIN_MAINNET_RPC_URL}"
+valuechain_testnet = "${VALUECHAIN_TESTNET_RPC_URL}"
+
+[etherscan]
+valuechain_mainnet = { key = "${ETHERSCAN_API_KEY}", url = "https://main-scan.valuechain.xyz/api" }

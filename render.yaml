@@ -1,0 +1,99 @@
+# Render Blueprint — HATCH API (free tier)
+# Secrets use sync:false / generateValue — never hardcode API keys here.
+
+services:
+  - type: web
+    name: hatch-api
+    runtime: node
+    plan: free
+    region: oregon
+    rootDir: .
+    buildCommand: npm install && npx prisma generate --schema=packages/backend/prisma/schema.prisma && npm run build -w @hatch/backend
+    startCommand: cd packages/backend && npx prisma migrate deploy && npm run start
+    healthCheckPath: /api/health/live
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "10000"
+      - key: HATCH_DEFAULT_PROFILE
+        value: mainnet
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CRON_SECRET
+        generateValue: true
+      - key: KILL_SWITCH
+        value: "false"
+      - key: TRADING_MAX_NOTIONAL_USD
+        value: "100"
+      - key: SOSO_API_BASE_URL
+        value: https://openapi.sosovalue.com/openapi/v1
+      - key: NVIDIA_BASE_URL
+        value: https://integrate.api.nvidia.com/v1
+      - key: NVIDIA_MODEL
+        value: deepseek-ai/deepseek-v4-flash
+      - key: NVIDIA_MODEL_ALT
+        value: openai/gpt-oss-120b
+      - key: NVIDIA_MODEL_ALT2
+        value: meta/llama-3.3-70b-instruct
+      - key: GROQ_BASE_URL
+        value: https://api.groq.com/openai/v1
+      - key: GROQ_MODEL
+        value: llama-3.3-70b-versatile
+      - key: CEREBRAS_BASE_URL
+        value: https://api.cerebras.ai/v1
+      - key: CEREBRAS_MODEL
+        value: llama3.3-70b
+      - key: SAMBANOVA_BASE_URL
+        value: https://api.sambanova.ai/v1
+      - key: SAMBANOVA_MODEL
+        value: Meta-Llama-3.3-70B-Instruct
+      - key: SODEX_MAINNET_SPOT_REST
+        value: https://mainnet-gw.sodex.dev/api/v1/spot
+      - key: SODEX_TESTNET_SPOT_REST
+        value: https://testnet-gw.sodex.dev/api/v1/spot
+      - key: VALUECHAIN_MAINNET_CHAIN_ID
+        value: "286623"
+      - key: VALUECHAIN_TESTNET_CHAIN_ID
+        value: "138565"
+      - key: VALUECHAIN_MAINNET_RPC_URL
+        value: https://mainnet.valuechain.xyz
+      - key: VALUECHAIN_TESTNET_RPC_URL
+        value: https://testnet-v2.valuechain.xyz
+      - key: BASE_RPC_URL
+        value: https://mainnet.base.org
+      - key: HATCH_LOG_ADDRESS_MAINNET
+        value: "0x06a8ADeB3d1d1a4160606967308C275a627E4fCB"
+      - key: HATCH_SCHEDULE_ADDRESS_MAINNET
+        value: "0xfdC9A9F19441f10729769393CBBD6d870802Ace9"
+      - key: HATCH_LOG_ADDRESS_TESTNET
+        value: "0xB4483128Bf95aa63621cB9EcA7f5d22a0d546b6C"
+      - key: HATCH_SCHEDULE_ADDRESS_TESTNET
+        value: "0x3db8750EE3a397b5A8A4e1842Bfb69f511342C6b"
+      - key: SNAPSHOT_INTERVAL_MS
+        value: "60000"
+      - key: CORS_ALLOWED_ORIGINS
+        value: "*"
+      - key: FRONTEND_URL
+        value: https://hatch-api.onrender.com
+      # Secrets — set via Render dashboard or API (never commit values)
+      - key: SOSO_API_KEY
+        sync: false
+      - key: NVIDIA_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: CEREBRAS_API_KEY
+        sync: false
+      - key: SAMBANOVA_API_KEY
+        sync: false
+      - key: UPSTASH_REDIS_REST_URL
+        sync: false
+      - key: UPSTASH_REDIS_REST_TOKEN
+        sync: false
+      # NEVER set SODEX_PRIVATE_KEY / SODEX_ADDRESS / SODEX_ACCOUNT_ID for user trading

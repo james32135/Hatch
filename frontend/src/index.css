@@ -1,0 +1,98 @@
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* HATCH dark premium — dark by default, always. */
+    --background: 0 0% 0%;
+    --foreground: 0 0% 100%;
+
+    --card: 0 0% 4%;
+    --card-foreground: 0 0% 100%;
+
+    --popover: 0 0% 6%;
+    --popover-foreground: 0 0% 100%;
+
+    --primary: 0 0% 100%;
+    --primary-foreground: 0 0% 0%;
+
+    --secondary: 0 0% 8%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 0 0% 8%;
+    --muted-foreground: 240 5% 65%;
+    --faint: 240 4% 46%;
+
+    --accent: 0 0% 12%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 350 89% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 142 71% 45%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 92% 55%;
+    --warning-foreground: 0 0% 0%;
+
+    --info: 199 89% 60%;
+    --info-foreground: 0 0% 0%;
+
+    --border: 0 0% 100% / 0.08;
+    --input: 0 0% 100% / 0.12;
+    --ring: 0 0% 100%;
+
+    --radius: 0.875rem;
+
+    --sidebar-background: 0 0% 3%;
+    --sidebar-foreground: 240 5% 65%;
+    --sidebar-primary: 0 0% 100%;
+    --sidebar-primary-foreground: 0 0% 0%;
+    --sidebar-accent: 0 0% 8%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 0 0% 100% / 0.06;
+    --sidebar-ring: 0 0% 100%;
+  }
+}
+
+@layer base {
+  * {
+    border-color: hsl(0 0% 100% / 0.08);
+  }
+
+  html, body {
+    background-color: #000;
+    color: hsl(var(--foreground));
+  }
+
+  body {
+    @apply antialiased;
+    font-family: 'Geist', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    font-size: 14px;
+    font-feature-settings: 'ss01', 'cv11';
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-medium tracking-tight text-foreground;
+    font-family: 'Geist', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  }
+
+  .font-mono { font-family: 'Geist Mono', ui-monospace, monospace; }
+
+  /* Subtle grid backdrop for hero */
+  .hatch-grid {
+    background-image:
+      linear-gradient(hsl(0 0% 100% / 0.04) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(0 0% 100% / 0.04) 1px, transparent 1px);
+    background-size: 48px 48px;
+  }
+
+  .hairline { border-color: hsl(0 0% 100% / 0.08); }
+}

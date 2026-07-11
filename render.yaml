@@ -80,7 +80,7 @@ services:
       - key: CORS_ALLOWED_ORIGINS
         value: "*"
       - key: FRONTEND_URL
-        value: https://hatch-api.onrender.com
+        value: https://hatch-api-h018.onrender.com
       # Secrets — set via Render dashboard or API (never commit values)
       - key: SOSO_API_KEY
         sync: false

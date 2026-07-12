@@ -2,11 +2,12 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { SectionCard } from "@/components/common/SectionCard";
 import { StatusPip } from "@/components/common/StatusPip";
-import { Unavailable } from "@/components/common/Unavailable";
+import { EmptyState } from "@/components/common/EmptyState";
 import { fmtUsd, fmtRelative } from "@/lib/format";
+import { friendlyRisk, friendlyReadiness, friendlyLessonTitle } from "@/lib/copy";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Plus, ArrowRight, TrendingUp, Sparkles, Users } from "lucide-react";
+import { Plus, ArrowRight, TrendingUp, Sparkles, Users, BookOpen, Calendar } from "lucide-react";
 import { motion } from "framer-motion";
 
 export default function Dashboard() {
@@ -15,12 +16,9 @@ export default function Dashboard() {
   const allowances = useQuery({ queryKey: ["allowances"], queryFn: () => api.get<any>("/api/allowances") });
   const handoffs = useQuery({ queryKey: ["allowances", "handoffs"], queryFn: () => api.get<any>("/api/allowances/handoffs") });
   const sodex = useQuery({ queryKey: ["sodex-readiness"], queryFn: () => api.get<any>("/api/sodex/readiness") });
-  const caps = useQuery({ queryKey: ["ssi-caps"], queryFn: () => api.get<any>("/api/ssi/capabilities", { auth: false }) });
-  const vc = useQuery({ queryKey: ["vc-main"], queryFn: () => api.get<any>("/api/valuechain/contracts?network=mainnet", { auth: false }) });
 
   const children = me.data?.children || me.data?.user?.children || [];
 
-  // Live portfolio totals per child (auth/me does not embed snapshots)
   const portfolios = useQuery({
     queryKey: ["dashboard-portfolios", children.map((c: any) => c.id).join(",")],
     queryFn: async () => {
@@ -34,134 +32,211 @@ export default function Dashboard() {
               p?.totalUsd ??
               p?.latestSnapshot?.totalUsd ??
               null;
-            return [c.id, total] as const;
+            const pnl = p?.performance?.pnlUsd ?? null;
+            return [c.id, { total, pnl }] as const;
           } catch {
-            return [c.id, null] as const;
+            return [c.id, { total: null, pnl: null }] as const;
           }
         }),
       );
-      return Object.fromEntries(entries) as Record<string, number | null>;
+      return Object.fromEntries(entries) as Record<string, { total: number | null; pnl: number | null }>;
     },
     enabled: children.length > 0,
   });
 
-  if (me.isLoading) return <div className="text-sm text-white/50">Loading…</div>;
+  const lessonsPreview = useQuery({
+    queryKey: ["dash-lessons", children[0]?.id],
+    queryFn: () => api.get<any>(`/api/lessons/${children[0].id}`),
+    enabled: !!children[0]?.id,
+  });
+
+  if (me.isLoading) {
+    return (
+      <div className="space-y-4">
+        <div className="h-8 w-48 animate-pulse rounded bg-white/5" />
+        <div className="grid gap-3 md:grid-cols-3">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="h-24 animate-pulse rounded-2xl bg-white/[0.03]" />
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   if (children.length === 0) {
     return (
       <motion.div
-        initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-        className="relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-white/[0.04] to-transparent p-12 text-center"
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-sky-500/[0.08] via-white/[0.02] to-emerald-500/[0.06] p-10 text-center md:p-14"
       >
-        <motion.div
-          aria-hidden
-          className="absolute -top-32 left-1/2 h-96 w-96 -translate-x-1/2 rounded-full blur-3xl"
-          style={{ background: "radial-gradient(closest-side, hsl(199 89% 60% / 0.2), transparent)" }}
-          animate={{ scale: [1, 1.1, 1] }} transition={{ duration: 6, repeat: Infinity }}
-        />
-        <div className="relative">
-          <Sparkles className="mx-auto mb-4 h-8 w-8 text-white/70" />
-          <h2 className="text-2xl font-medium tracking-tight md:text-3xl">Add your first child to begin their first portfolio.</h2>
-          <p className="mt-2 text-sm text-white/60">Onboarding takes about a minute.</p>
-          <Button className="mt-6 bg-white text-black hover:bg-white/90" onClick={() => nav("/app/onboarding")}>
-            <Plus className="mr-1.5 h-4 w-4" /> Start onboarding
-          </Button>
-        </div>
+        <Sparkles className="mx-auto mb-4 h-8 w-8 text-sky-300/80" strokeWidth={1.5} />
+        <h2 className="text-2xl font-medium tracking-tight md:text-3xl">
+          Instead of weekly spending money,<br className="hidden sm:block" /> build their future automatically.
+        </h2>
+        <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-white/60">
+          Add your child, set a weekly allowance, and HATCH invests it for them while they learn how money grows.
+        </p>
+        <Button className="mt-8 bg-white text-black hover:bg-white/90" onClick={() => nav("/app/onboarding")}>
+          <Plus className="mr-1.5 h-4 w-4" /> Add your first child
+        </Button>
       </motion.div>
     );
   }
 
   const pendingHandoffs = (handoffs.data?.handoffs || []).length;
   const totals = portfolios.data || {};
-  const known = Object.values(totals).filter((v) => v != null && !Number.isNaN(Number(v))) as number[];
+  const known = Object.values(totals)
+    .map((v) => v.total)
+    .filter((v) => v != null && !Number.isNaN(Number(v))) as number[];
   const totalUsd = known.length ? known.reduce((s, n) => s + Number(n), 0) : null;
+  const policies = allowances.data?.policies || [];
+  const nextPolicy = policies
+    .filter((p: any) => !p.paused && p.nextDueAt)
+    .sort((a: any, b: any) => new Date(a.nextDueAt).getTime() - new Date(b.nextDueAt).getTime())[0];
+  const latestLesson = (lessonsPreview.data?.lessons || lessonsPreview.data || [])[0];
+  const ready = friendlyReadiness(sodex.data?.nextStep);
+
+  let suggested: { label: string; to: string } | null = null;
+  if (pendingHandoffs > 0 && children[0]) {
+    suggested = { label: "Approve this week's investment", to: `/app/children/${children[0].id}/allowance` };
+  } else if (sodex.data && sodex.data.nextStep !== "READY") {
+    suggested = { label: "Finish trading setup", to: "/app/sodex" };
+  } else if (children[0]) {
+    suggested = { label: `Open ${children[0].displayName}'s portfolio`, to: `/app/children/${children[0].id}` };
+  }
 
   return (
-    <div className="space-y-6">
-      <motion.div
-        initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
-        className="flex items-end justify-between"
-      >
+    <div className="space-y-8">
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <div className="text-[11px] uppercase tracking-[0.2em] text-white/40">Overview</div>
-          <h1 className="mt-1 text-3xl font-medium tracking-tight">Dashboard</h1>
+          <p className="text-sm text-white/50">Building their future, one week at a time.</p>
+          <h1 className="mt-1 text-3xl font-medium tracking-tight">Home</h1>
         </div>
-        <Button size="sm" className="bg-white text-black hover:bg-white/90" asChild><Link to="/app/onboarding"><Plus className="mr-1.5 h-4 w-4" /> Add child</Link></Button>
+        <Button size="sm" className="bg-white text-black hover:bg-white/90" asChild>
+          <Link to="/app/onboarding">
+            <Plus className="mr-1.5 h-4 w-4" /> Add child
+          </Link>
+        </Button>
       </motion.div>
 
-      {/* Summary strip */}
-      <div className="grid gap-px overflow-hidden rounded-2xl border border-white/10 bg-white/5 md:grid-cols-3">
-        <StatTile label="Total portfolio" value={totalUsd == null ? "Unavailable" : fmtUsd(totalUsd)} icon={TrendingUp} tone="hsl(142 71% 45%)" />
-        <StatTile label="Children" value={String(children.length)} icon={Users} tone="hsl(199 89% 60%)" />
-        <StatTile label="Pending signatures" value={String(pendingHandoffs)} icon={Sparkles} tone={pendingHandoffs ? "hsl(38 92% 55%)" : "hsl(0 0% 60%)"} />
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <OutcomeTile
+          label="Invested so far"
+          value={totalUsd == null ? "—" : fmtUsd(totalUsd)}
+          hint={totalUsd === 0 ? "Waiting for first investment" : "Across all children"}
+          icon={TrendingUp}
+        />
+        <OutcomeTile label="Children" value={String(children.length)} hint="Growing with you" icon={Users} />
+        <OutcomeTile
+          label="Next allowance"
+          value={nextPolicy ? fmtRelative(nextPolicy.nextDueAt) : "—"}
+          hint={nextPolicy ? fmtUsd(nextPolicy.amountUsd) : "Set a weekly plan"}
+          icon={Calendar}
+        />
+        <OutcomeTile
+          label="Needs your OK"
+          value={String(pendingHandoffs)}
+          hint={pendingHandoffs ? "Sign to invest this week" : "You're all caught up"}
+          icon={Sparkles}
+          highlight={pendingHandoffs > 0}
+        />
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        {children.map((c: any, i: number) => (
-          <motion.div
-            key={c.id}
-            initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }}
-          >
-            <Link
-              to={`/app/children/${c.id}`}
-              className="group relative block overflow-hidden rounded-2xl border border-white/10 bg-white/[0.02] p-5 transition hover:border-white/20 hover:bg-white/[0.04]"
-            >
-              <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-white/[0.03] blur-2xl transition-opacity group-hover:bg-white/[0.06]" />
-              <div className="relative flex items-start justify-between">
-                <div>
-                  <div className="text-lg font-medium">{c.displayName}</div>
-                  <div className="text-xs text-white/50">Age {c.ageYears} · {c.riskTier || "BALANCED"}</div>
-                </div>
-                {c.paused && <StatusPip tone="warn" label="Paused" />}
-              </div>
-              <div className="relative mt-6 text-3xl font-medium tracking-tight">
-                {totals[c.id] == null ? "Unavailable" : fmtUsd(totals[c.id])}
-              </div>
-              <div className="relative mt-1 text-xs text-white/50">Latest snapshot</div>
-              <svg viewBox="0 0 300 40" className="relative mt-4 h-10 w-full">
-                <motion.path
-                  d={i % 2 === 0 ? "M 0 30 L 50 26 L 100 28 L 150 18 L 200 22 L 250 12 L 300 8" : "M 0 22 L 50 28 L 100 20 L 150 24 L 200 14 L 250 18 L 300 10"}
-                  stroke="hsl(199 89% 60%)" strokeWidth="1.5" fill="none"
-                  initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 1.4, delay: 0.2 + i * 0.06 }}
-                />
-              </svg>
-              <div className="relative mt-4 flex items-center gap-2 text-xs text-white/50 group-hover:text-white">
-                Open <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
-              </div>
-            </Link>
-          </motion.div>
-        ))}
-      </div>
+      {suggested && (
+        <Link
+          to={suggested.to}
+          className="flex items-center justify-between gap-4 rounded-2xl border border-sky-400/20 bg-sky-400/[0.06] px-5 py-4 transition hover:bg-sky-400/[0.1]"
+        >
+          <div>
+            <div className="text-xs uppercase tracking-wider text-sky-200/70">Suggested next step</div>
+            <div className="mt-0.5 font-medium text-white">{suggested.label}</div>
+          </div>
+          <ArrowRight className="h-4 w-4 text-sky-200/80" />
+        </Link>
+      )}
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <SectionCard title="Weekly allowance" action={<Link to="/app/notifications" className="text-xs text-white/50 hover:text-white">Notifications</Link>}>
-          {allowances.isError ? <Unavailable /> : (
-            <div className="space-y-2 text-sm">
-              {(allowances.data?.policies || []).length === 0 && <div className="text-white/50">No policies yet.</div>}
-              {(allowances.data?.policies || []).slice(0, 3).map((p: any) => (
-                <div key={p.id} className="flex items-center justify-between rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2">
+      <div className="grid gap-4 lg:grid-cols-2">
+        {children.map((c: any, i: number) => {
+          const row = totals[c.id];
+          const total = row?.total;
+          return (
+            <motion.div key={c.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
+              <Link
+                to={`/app/children/${c.id}`}
+                className="group block rounded-2xl border border-white/10 bg-white/[0.02] p-5 transition hover:border-white/20 hover:bg-white/[0.04]"
+              >
+                <div className="flex items-start justify-between">
                   <div>
-                    <div className="font-medium">{fmtUsd(p.amountUsd)} <span className="text-white/50">every {p.cadenceDays}d</span></div>
-                    <div className="text-xs text-white/50">Next {fmtRelative(p.nextDueAt)}</div>
+                    <div className="text-lg font-medium">{c.displayName}</div>
+                    <div className="text-xs text-white/50">
+                      Age {c.ageYears} · {friendlyRisk(c.riskTier)}
+                    </div>
+                  </div>
+                  {c.paused && <StatusPip tone="warn" label="Paused" />}
+                </div>
+                <div className="mt-5 text-3xl font-medium tracking-tight">
+                  {total == null ? "—" : fmtUsd(total)}
+                </div>
+                <div className="mt-1 text-xs text-white/45">
+                  {total === 0 ? "Ready for their first investment" : "Portfolio value"}
+                </div>
+                <div className="mt-4 flex items-center gap-1.5 text-xs text-white/50 group-hover:text-white">
+                  View portfolio <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
+                </div>
+              </Link>
+            </motion.div>
+          );
+        })}
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <SectionCard title="Weekly allowance">
+          {policies.length === 0 ? (
+            <EmptyState title="No allowance yet" detail="Set a weekly amount and HATCH invests it automatically." actionLabel="Set allowance" onAction={() => nav(`/app/children/${children[0].id}/allowance`)} />
+          ) : (
+            <div className="space-y-2 text-sm">
+              {policies.slice(0, 3).map((p: any) => (
+                <Link
+                  key={p.id}
+                  to={`/app/children/${p.childId}/allowance`}
+                  className="flex items-center justify-between rounded-xl border border-white/8 bg-white/[0.02] px-3 py-2.5 hover:bg-white/[0.04]"
+                >
+                  <div>
+                    <div className="font-medium">
+                      {fmtUsd(p.amountUsd)} <span className="text-white/45">every week</span>
+                    </div>
+                    <div className="text-xs text-white/45">Next {fmtRelative(p.nextDueAt)}</div>
                   </div>
                   <StatusPip tone={p.paused ? "warn" : "ok"} label={p.paused ? "Paused" : "Active"} />
-                </div>
+                </Link>
               ))}
-              {pendingHandoffs > 0 && (
-                <div className="mt-2 rounded-lg border border-[hsl(38_92%_55%/0.3)] bg-[hsl(38_92%_55%/0.06)] px-3 py-2 text-xs text-[hsl(38_92%_75%)]">
-                  {pendingHandoffs} allowance {pendingHandoffs === 1 ? "needs" : "need"} your signature.
-                </div>
-              )}
             </div>
           )}
         </SectionCard>
 
-        <SectionCard title="Infrastructure">
-          <div className="space-y-2 text-sm">
-            <Row label="SoDEX" tone={sodex.data?.nextStep === "READY" ? "ok" : "warn"} value={sodex.data?.nextStep || "—"} />
-            <Row label="SSI Path B (Base mint)" tone="warn" value="Blocked — WLP only" />
-            <Row label="SSI Path A (SoDEX Vault)" tone={caps.data?.pathA_sodexVault?.mint ? "ok" : "warn"} value={caps.data?.pathA_sodexVault?.mint ? "Available" : "Unavailable"} />
-            <Row label="ValueChain audit" tone={vc.data?.ok ? "ok" : "warn"} value={vc.data?.ok ? "Verified" : "—"} />
+        <SectionCard title="Learning & readiness">
+          <div className="space-y-3 text-sm">
+            <div className="flex items-center justify-between rounded-xl border border-white/8 bg-white/[0.02] px-3 py-2.5">
+              <span className="text-white/70">Trading account</span>
+              <StatusPip tone={ready.tone} label={ready.label} />
+            </div>
+            <div className="flex items-start gap-3 rounded-xl border border-white/8 bg-white/[0.02] px-3 py-2.5">
+              <BookOpen className="mt-0.5 h-4 w-4 text-white/40" strokeWidth={1.5} />
+              <div className="min-w-0 flex-1">
+                <div className="text-xs text-white/45">Latest lesson</div>
+                <div className="truncate font-medium text-white/90">
+                  {latestLesson
+                    ? friendlyLessonTitle(latestLesson)
+                    : "Generate a lesson from their portfolio"}
+                </div>
+              </div>
+              {children[0] && (
+                <Link to={`/app/children/${children[0].id}/lessons`} className="text-xs text-white/50 hover:text-white">
+                  Open
+                </Link>
+              )}
+            </div>
           </div>
         </SectionCard>
       </div>
@@ -169,26 +244,30 @@ export default function Dashboard() {
   );
 }
 
-function StatTile({ label, value, icon: Icon, tone }: { label: string; value: string; icon: any; tone: string }) {
+function OutcomeTile({
+  label,
+  value,
+  hint,
+  icon: Icon,
+  highlight,
+}: {
+  label: string;
+  value: string;
+  hint: string;
+  icon: any;
+  highlight?: boolean;
+}) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-      className="relative overflow-hidden bg-black p-5"
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      className={`rounded-2xl border p-4 ${highlight ? "border-amber-400/25 bg-amber-400/[0.06]" : "border-white/8 bg-white/[0.02]"}`}
     >
-      <div className="absolute -right-6 -top-6 h-20 w-20 rounded-full blur-2xl" style={{ background: tone, opacity: 0.15 }} />
-      <div className="relative flex items-center gap-2 text-[11px] uppercase tracking-widest text-white/40">
-        <Icon className="h-3.5 w-3.5" /> {label}
+      <div className="flex items-center gap-2 text-[11px] uppercase tracking-wider text-white/40">
+        <Icon className="h-3.5 w-3.5" strokeWidth={1.5} /> {label}
       </div>
-      <div className="relative mt-2 text-2xl font-medium tracking-tight">{value}</div>
+      <div className="mt-2 text-2xl font-medium tracking-tight">{value}</div>
+      <div className="mt-1 text-xs text-white/45">{hint}</div>
     </motion.div>
-  );
-}
-
-function Row({ label, tone, value }: { label: string; tone: "ok" | "warn" | "danger"; value: string }) {
-  return (
-    <div className="flex items-center justify-between rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2">
-      <span className="text-white/70">{label}</span>
-      <StatusPip tone={tone} label={value} />
-    </div>
   );
 }

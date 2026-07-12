@@ -52,20 +52,20 @@ export default function Landing() {
             initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}
             className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-xs text-white/60"
           >
-            <Sparkles className="h-3.5 w-3.5" /> Greenlight for on-chain kids
+            <Sparkles className="h-3.5 w-3.5" /> Family investing, made calm
           </motion.p>
           <motion.h1
             initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.05 }}
             className="text-5xl font-medium tracking-tight md:text-7xl"
           >
-            Your child's first portfolio.<br />
-            <span className="text-white/50">Built automatically.</span>
+            Instead of spending money,<br />
+            <span className="text-white/50">build their future.</span>
           </motion.h1>
           <motion.p
             initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.15 }}
             className="mt-6 max-w-xl text-base text-white/60 md:text-lg"
           >
-            Turn weekly allowance into a real SSI index portfolio. You keep the keys. They learn from live markets.
+            Set a weekly allowance. HATCH invests it automatically. Your child learns from real markets in plain language.
           </motion.p>
           <motion.div
             initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.25 }}
@@ -75,7 +75,7 @@ export default function Landing() {
               <Link to="/login">Get started <ArrowRight className="ml-1.5 h-4 w-4 transition-transform group-hover:translate-x-0.5" /></Link>
             </Button>
             <Button asChild size="lg" variant="ghost" className="text-white/70 hover:text-white">
-              <Link to="/judges">For judges</Link>
+              <a href="#how">See how it works</a>
             </Button>
           </motion.div>
 
@@ -88,10 +88,10 @@ export default function Landing() {
             className="mt-14 grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-white/10 bg-white/5 md:grid-cols-4"
           >
             {[
-              { k: "$0", v: "Custody risk" },
-              { k: "7 days", v: "Cadence default" },
-              { k: "2", v: "SSI indices" },
-              { k: "100%", v: "On-chain audit" },
+              { k: "You", v: "Keep control" },
+              { k: "Weekly", v: "Automatic investing" },
+              { k: "AI", v: "Explains every move" },
+              { k: "Kids", v: "Learn as they grow" },
             ].map((s, i) => (
               <div key={i} className="bg-black p-5">
                 <div className="text-2xl font-medium tracking-tight">{s.k}</div>
@@ -103,14 +103,13 @@ export default function Landing() {
       </section>
 
       {/* How it works */}
-      <section className="mx-auto max-w-6xl px-6 py-24">
-        <SectionEyebrow>Flow</SectionEyebrow>
+      <section id="how" className="mx-auto max-w-6xl scroll-mt-24 px-6 py-24">
         <h2 className="mb-12 text-3xl font-medium tracking-tight md:text-4xl">How HATCH works</h2>
         <div className="grid gap-4 md:grid-cols-3">
           {[
-            { icon: Wallet, title: "01 — Connect", body: "Sign in with your wallet. You always hold the keys." },
-            { icon: Sparkles, title: "02 — Set allowance", body: "Choose weekly amount and risk tier. That's it." },
-            { icon: GraduationCap, title: "03 — Learn together", body: "Your child sees why their portfolio moved, in plain English." },
+            { icon: Wallet, title: "Connect securely", body: "Sign in with your wallet. You approve every investment." },
+            { icon: Sparkles, title: "Set a weekly allowance", body: "Pick an amount and investing style. HATCH handles the rest." },
+            { icon: GraduationCap, title: "Learn together", body: "Short lessons explain what changed and why, in plain language." },
           ].map((s, i) => (
             <motion.div
               key={i}
@@ -131,9 +130,8 @@ export default function Landing() {
       {/* Product preview */}
       <section className="border-t border-white/5">
         <div className="mx-auto max-w-6xl px-6 py-24">
-          <SectionEyebrow>Parent dashboard</SectionEyebrow>
-          <h2 className="mb-3 text-3xl font-medium tracking-tight md:text-4xl">Every child. Every position. One view.</h2>
-          <p className="mb-10 max-w-xl text-sm text-white/60">A quiet control surface. Real balances, live from SoDEX Vault. Portfolio math you can actually explain.</p>
+          <h2 className="mb-3 text-3xl font-medium tracking-tight md:text-4xl">Every child. Every investment. One calm view.</h2>
+          <p className="mb-10 max-w-xl text-sm text-white/60">See growth, next allowance, and lessons without the jargon.</p>
           <DashboardMock />
         </div>
       </section>
@@ -141,14 +139,13 @@ export default function Landing() {
       {/* What they own */}
       <section className="border-t border-white/5">
         <div className="mx-auto max-w-6xl px-6 py-24">
-          <SectionEyebrow>Assets</SectionEyebrow>
-          <h2 className="mb-3 text-3xl font-medium tracking-tight md:text-4xl">What they actually own</h2>
-          <p className="mb-10 max-w-xl text-sm text-white/60">Real SSI index tokens on SoDEX Vault. Dual yield is variable and not guaranteed.</p>
+          <h2 className="mb-3 text-3xl font-medium tracking-tight md:text-4xl">What they can invest in</h2>
+          <p className="mb-10 max-w-xl text-sm text-white/60">Diversified index baskets designed for long-term learning. Returns are never guaranteed.</p>
           <div className="grid gap-4 md:grid-cols-3">
             {[
-              { t: "MAG7.ssi", d: "SSI's diversified basket of the top crypto majors.", tone: "hsl(199 89% 60%)" },
-              { t: "USSI", d: "Stable-value index for the steady half of the portfolio.", tone: "hsl(142 71% 45%)" },
-              { t: "sMAG7.ssi", d: "Staked MAG7 for optional variable yield via SSI Earn.", tone: "hsl(38 92% 55%)" },
+              { t: "MAG7 index", d: "A diversified basket of leading digital assets.", tone: "hsl(199 89% 60%)" },
+              { t: "USSI index", d: "A steadier allocation for balanced portfolios.", tone: "hsl(142 71% 45%)" },
+              { t: "Earn", d: "Optional staking for variable rewards when you choose.", tone: "hsl(38 92% 55%)" },
             ].map((x, i) => (
               <motion.div
                 key={x.t}
@@ -172,16 +169,15 @@ export default function Landing() {
       {/* Feature grid */}
       <section className="border-t border-white/5">
         <div className="mx-auto max-w-6xl px-6 py-24">
-          <SectionEyebrow>Why HATCH</SectionEyebrow>
-          <h2 className="mb-12 text-3xl font-medium tracking-tight md:text-4xl">Built for families, secured like DeFi.</h2>
+          <h2 className="mb-12 text-3xl font-medium tracking-tight md:text-4xl">Built for parents. Safe for kids.</h2>
           <div className="grid gap-4 md:grid-cols-3">
             {[
-              { icon: Lock, t: "Non-custodial", d: "Every trade is signed by your wallet. HATCH never holds funds." },
-              { icon: Zap, t: "One-tap allowance", d: "EIP-712 signature. Backend relays. Confirmed in seconds." },
-              { icon: LineChart, t: "Real indices", d: "MAG7.ssi and USSI, on SoDEX Vault. Not synthetic exposure." },
-              { icon: GraduationCap, t: "Kid explainer", d: "AI translates portfolio moves into plain-English lessons." },
-              { icon: ShieldCheck, t: "ValueChain audit", d: "Immutable log of every allowance and trade, on-chain." },
-              { icon: Baby, t: "Age-appropriate", d: "Child view shows only what they need. No keys, no risk." },
+              { icon: Lock, t: "You stay in control", d: "Every investment needs your wallet approval. HATCH never holds your funds." },
+              { icon: Zap, t: "Weekly on autopilot", d: "Approve once a week. Investing happens in seconds." },
+              { icon: LineChart, t: "Real market exposure", d: "Diversified index baskets your child can grow with." },
+              { icon: GraduationCap, t: "Lessons that stick", d: "AI turns portfolio moves into short, clear explanations." },
+              { icon: ShieldCheck, t: "Independently verifiable", d: "Important actions are recorded so you can verify what happened." },
+              { icon: Baby, t: "Kid-safe view", d: "Children can look and learn. They cannot move money." },
             ].map((f, i) => (
               <motion.div
                 key={i}
@@ -204,11 +200,9 @@ export default function Landing() {
           <div className="grid gap-6 md:grid-cols-2">
             <div>
               <ShieldCheck className="mb-4 h-6 w-6 text-white/70" />
-              <SectionEyebrow>Architecture</SectionEyebrow>
-              <h2 className="text-3xl font-medium tracking-tight md:text-4xl">Non-custodial by design</h2>
+              <h2 className="text-3xl font-medium tracking-tight md:text-4xl">You stay in control</h2>
               <p className="mt-3 max-w-lg text-sm text-white/60">
-                HATCH never takes custody of your SoDEX account. Every trade is signed by your wallet.
-                The backend validates, relays, and writes an immutable audit log to ValueChain.
+                HATCH never holds your funds. Every investment needs your wallet approval, and important actions can be independently verified.
               </p>
             </div>
             <FlowDiagram />
@@ -333,7 +327,7 @@ function DashboardMock() {
         {/* sidebar */}
         <div className="space-y-1 bg-black p-4 text-xs">
           <div className="mb-4 flex items-center gap-2 text-white/80"><Sparkles className="h-3.5 w-3.5" /> HATCH</div>
-          {["Dashboard", "Children", "Activity", "SoDEX", "ValueChain"].map((t, i) => (
+          {["Home", "Children", "Activity", "Trading", "Security"].map((t, i) => (
             <div key={t} className={`rounded px-2.5 py-1.5 ${i === 0 ? "bg-white/10 text-white" : "text-white/40"}`}>{t}</div>
           ))}
         </div>
@@ -399,10 +393,10 @@ function DashboardMock() {
 
 function FlowDiagram() {
   const steps = [
-    { l: "Parent wallet", s: "EIP-712 signature" },
-    { l: "HATCH backend", s: "validate + relay" },
-    { l: "SoDEX Vault", s: "execute buy" },
-    { l: "ValueChain", s: "immutable audit log" },
+    { l: "You approve", s: "Confirm in your wallet" },
+    { l: "HATCH invests", s: "Places the order for you" },
+    { l: "Portfolio updates", s: "Their holdings grow" },
+    { l: "Lessons arrive", s: "Plain-language explanations" },
   ];
   return (
     <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-6">
@@ -414,12 +408,12 @@ function FlowDiagram() {
             transition={{ delay: i * 0.1 }}
             className="flex items-center gap-4"
           >
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] font-mono text-xs text-white/60">
-              0{i + 1}
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-xs text-white/60">
+              {i + 1}
             </div>
             <div className="flex-1">
               <div className="text-sm text-white">{s.l}</div>
-              <div className="font-mono text-xs text-white/40">{s.s}</div>
+              <div className="text-xs text-white/40">{s.s}</div>
             </div>
             <CheckCircle2 className="h-4 w-4 text-[hsl(142_71%_55%)]" />
           </motion.div>

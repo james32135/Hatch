@@ -10,12 +10,15 @@ export default function PublicNav() {
           <HatchLogo />
         </Link>
         <nav className="hidden items-center gap-6 text-sm text-white/60 sm:flex">
-          <NavLink to="/judges" className={({ isActive }) => isActive ? "text-white" : "hover:text-white"}>Judges</NavLink>
-          <NavLink to="/diag" className={({ isActive }) => isActive ? "text-white" : "hover:text-white"}>Diagnostics</NavLink>
-          <a href="https://github.com/james32135/Hatch" target="_blank" rel="noreferrer" className="hover:text-white">GitHub</a>
+          <a href="#how" className="hover:text-white">
+            How it works
+          </a>
+          <NavLink to="/login" className={({ isActive }) => (isActive ? "text-white" : "hover:text-white")}>
+            Sign in
+          </NavLink>
         </nav>
         <Button asChild size="sm" className="bg-white text-black hover:bg-white/90">
-          <Link to="/login">Get started →</Link>
+          <Link to="/login">Get started</Link>
         </Button>
       </div>
     </header>

@@ -8,7 +8,6 @@ import { useEffect } from "react";
 
 import Landing from "@/pages/Landing";
 import Login from "@/pages/Login";
-import Judges from "@/pages/Judges";
 import Diag from "@/pages/Diag";
 import NotFound from "@/pages/NotFound";
 
@@ -59,19 +58,21 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Landing />} />
             <Route path="/login" element={<Login />} />
-            <Route path="/judges" element={<Judges />} />
+            <Route path="/judges" element={<Navigate to="/" replace />} />
             <Route path="/diag" element={<Diag />} />
 
             <Route path="/app" element={<ParentGuard><AppShell /></ParentGuard>}>
               <Route index element={<Dashboard />} />
               <Route path="onboarding" element={<Onboarding />} />
               <Route path="children" element={<ChildrenList />} />
-              <Route path="children/:childId" element={<ChildDetail />} />
-              <Route path="children/:childId/portfolio" element={<ChildPortfolio />} />
-              <Route path="children/:childId/allowance" element={<ChildAllowance />} />
-              <Route path="children/:childId/lessons" element={<ChildLessons />} />
-              <Route path="children/:childId/projections" element={<ChildProjections />} />
-              <Route path="children/:childId/ssi" element={<ChildSSI />} />
+              <Route path="children/:childId" element={<ChildDetail />}>
+                <Route index element={<ChildPortfolio />} />
+                <Route path="portfolio" element={<ChildPortfolio />} />
+                <Route path="allowance" element={<ChildAllowance />} />
+                <Route path="lessons" element={<ChildLessons />} />
+                <Route path="projections" element={<ChildProjections />} />
+                <Route path="ssi" element={<ChildSSI />} />
+              </Route>
               <Route path="sodex" element={<Sodex />} />
               <Route path="valuechain" element={<ValueChain />} />
               <Route path="activity" element={<Activity />} />

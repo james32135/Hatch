@@ -299,14 +299,30 @@ export default function Agent() {
             setRunSteps({});
           },
           onError: (message) => {
-            toast.error(message || "Copilot unavailable");
+            const msg = message || "Copilot unavailable — no AI provider responded.";
+            toast.error(msg);
+            setMessages((prev) => [
+              ...prev,
+              {
+                role: "assistant",
+                content: `**Copilot could not respond.** ${msg}\n\nIf you opened Child view in another tab, return here and sign in again as parent.`,
+              },
+            ]);
           },
         },
         ac.signal,
       );
     } catch (e: any) {
       if (e?.name !== "AbortError") {
-        toast.error(e?.message || "Copilot unavailable");
+        const msg = e?.message || "Copilot unavailable";
+        toast.error(msg);
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "assistant",
+            content: `**Copilot could not respond.** ${msg}`,
+          },
+        ]);
       }
     } finally {
       setRunning(false);

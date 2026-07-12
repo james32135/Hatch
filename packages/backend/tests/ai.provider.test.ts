@@ -33,12 +33,21 @@ describe("AI provider stack (live)", () => {
     expect(client.listProviders().length).toBeGreaterThan(0);
   });
 
-  it("lists NVIDIA as primary when key present", () => {
+  it("lists configured providers in priority order", () => {
     const providers = client.listProviders();
-    if (process.env.NVIDIA_API_KEY) {
-      expect(providers[0]?.id).toBe("nvidia-primary");
-      expect(providers[0]?.model).toContain("deepseek");
+    expect(providers.length).toBeGreaterThan(0);
+    const explicit = process.env.AI_PROVIDER?.trim().toLowerCase();
+    if (explicit === "nvidia") {
+      expect(providers.slice(0, 3).map((p) => p.id)).toEqual([
+        "nvidia-primary",
+        "nvidia-alt",
+        "nvidia-alt2",
+      ]);
+    } else if (explicit) {
+      expect(providers[0]?.id).toBe(explicit);
     }
+    const ids = new Set(providers.map((p) => p.id));
+    expect(ids.size).toBe(providers.length);
   });
 
   it("structured JSON mode", async () => {

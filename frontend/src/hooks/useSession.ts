@@ -7,16 +7,20 @@ export function useSession() {
   const [profile, setProfileState] = useState<HatchProfile>(() => getProfile());
 
   useEffect(() => {
-    const onAuth = () => {
+    const sync = () => {
       setJwtState(getJwt());
       setRoleState(getRole());
     };
     const onProfile = () => setProfileState(getProfile());
-    window.addEventListener("hatch:auth", onAuth);
+    window.addEventListener("hatch:auth", sync);
     window.addEventListener("hatch:profile", onProfile);
+    window.addEventListener("storage", sync);
+    window.addEventListener("popstate", sync);
     return () => {
-      window.removeEventListener("hatch:auth", onAuth);
+      window.removeEventListener("hatch:auth", sync);
       window.removeEventListener("hatch:profile", onProfile);
+      window.removeEventListener("storage", sync);
+      window.removeEventListener("popstate", sync);
     };
   }, []);
 

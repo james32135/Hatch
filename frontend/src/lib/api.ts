@@ -1,29 +1,91 @@
 const RAW_BASE = (import.meta.env.VITE_HATCH_API_BASE_URL as string | undefined) || "https://hatch-api-h018.onrender.com";
 export const API_BASE = RAW_BASE.replace(/\/$/, "");
 
-const JWT_KEY = "hatch.jwt";
+const PARENT_JWT_KEY = "hatch.jwt.parent";
+const CHILD_JWT_KEY = "hatch.jwt.child";
+/** @deprecated legacy single-key storage — migrated on read */
+const LEGACY_JWT_KEY = "hatch.jwt";
 const ROLE_KEY = "hatch.role";
 const PROFILE_KEY = "hatch.profile";
 
 export type HatchProfile = "mainnet" | "testnet" | "mainnet-readonly";
 
+function isChildRoute(): boolean {
+  try {
+    return typeof window !== "undefined" && window.location.pathname.startsWith("/child");
+  } catch {
+    return false;
+  }
+}
+
+function readParentJwt(): string | null {
+  try {
+    let token = localStorage.getItem(PARENT_JWT_KEY);
+    if (token) return token;
+    const legacy = localStorage.getItem(LEGACY_JWT_KEY);
+    const role = localStorage.getItem(ROLE_KEY);
+    if (legacy && role === "parent") {
+      localStorage.setItem(PARENT_JWT_KEY, legacy);
+      localStorage.removeItem(LEGACY_JWT_KEY);
+      return legacy;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export function getJwt(): string | null {
-  try { return localStorage.getItem(JWT_KEY); } catch { return null; }
+  try {
+    if (isChildRoute()) return sessionStorage.getItem(CHILD_JWT_KEY);
+    return readParentJwt();
+  } catch {
+    return null;
+  }
 }
+
 export function setJwt(token: string, role: "parent" | "child") {
-  localStorage.setItem(JWT_KEY, token);
-  localStorage.setItem(ROLE_KEY, role);
+  if (role === "child") {
+    sessionStorage.setItem(CHILD_JWT_KEY, token);
+  } else {
+    localStorage.setItem(PARENT_JWT_KEY, token);
+    localStorage.setItem(ROLE_KEY, "parent");
+    localStorage.removeItem(LEGACY_JWT_KEY);
+  }
   window.dispatchEvent(new Event("hatch:auth"));
 }
+
 export function clearJwt() {
-  localStorage.removeItem(JWT_KEY);
-  localStorage.removeItem(ROLE_KEY);
+  try {
+    if (isChildRoute()) {
+      sessionStorage.removeItem(CHILD_JWT_KEY);
+    } else {
+      localStorage.removeItem(PARENT_JWT_KEY);
+      localStorage.removeItem(LEGACY_JWT_KEY);
+      localStorage.removeItem(ROLE_KEY);
+    }
+  } catch { /* noop */ }
   window.dispatchEvent(new Event("hatch:auth"));
 }
-export function getRole(): "parent" | "child" | null {
-  const r = localStorage.getItem(ROLE_KEY);
-  return r === "parent" || r === "child" ? r : null;
+
+export function clearChildSession() {
+  try {
+    sessionStorage.removeItem(CHILD_JWT_KEY);
+  } catch { /* noop */ }
+  window.dispatchEvent(new Event("hatch:auth"));
 }
+
+export function getRole(): "parent" | "child" | null {
+  try {
+    if (isChildRoute()) {
+      return sessionStorage.getItem(CHILD_JWT_KEY) ? "child" : null;
+    }
+    return readParentJwt() ? "parent" : null;
+  } catch {
+    return null;
+  }
+}
+
 export function getProfile(): HatchProfile {
   const p = localStorage.getItem(PROFILE_KEY) as HatchProfile | null;
   return (
@@ -59,8 +121,6 @@ export async function apiRequest<T = any>(
     "X-HATCH-Profile": getProfile(),
     ...(headers as Record<string, string> | undefined),
   };
-  // Only set JSON content-type when a body is present — Fastify rejects
-  // Content-Type: application/json with an empty body.
   if (rest.body !== undefined && rest.body !== null && !finalHeaders["Content-Type"]) {
     finalHeaders["Content-Type"] = "application/json";
   }
@@ -148,7 +208,11 @@ export async function streamAgent(
     const errBody = ct.includes("application/json")
       ? await res.json().catch(() => null)
       : await res.text().catch(() => null);
-    throw makeError(res.status, errBody, `Agent stream failed: ${res.status}`);
+    const err = makeError(res.status, errBody, `Agent stream failed: ${res.status}`);
+    if (err.code === "forbidden_child_write") {
+      err.message = "Investment Copilot is for parents only. Sign in with your wallet on /login.";
+    }
+    throw err;
   }
 
   const reader = res.body?.getReader();
@@ -156,6 +220,8 @@ export async function streamAgent(
 
   const dec = new TextDecoder();
   let buf = "";
+  let sawDone = false;
+  let sawError = false;
 
   const dispatch = (block: string) => {
     const lines = block.split("\n");
@@ -175,8 +241,13 @@ export async function streamAgent(
     if (event === "progress") handlers.onProgress?.(parsed as AgentProgressPayload);
     else if (event === "thinking") handlers.onThinking?.((parsed as { delta: string }).delta);
     else if (event === "token") handlers.onToken?.((parsed as { delta: string }).delta);
-    else if (event === "done") handlers.onDone?.(parsed as AgentDonePayload);
-    else if (event === "error") handlers.onError?.((parsed as { message: string }).message);
+    else if (event === "done") {
+      sawDone = true;
+      handlers.onDone?.(parsed as AgentDonePayload);
+    } else if (event === "error") {
+      sawError = true;
+      handlers.onError?.((parsed as { message: string }).message);
+    }
   };
 
   while (true) {
@@ -190,4 +261,8 @@ export async function streamAgent(
     }
   }
   if (buf.trim()) dispatch(buf);
+
+  if (!sawDone && !sawError) {
+    handlers.onError?.("Copilot stream ended without a response. Try again.");
+  }
 }

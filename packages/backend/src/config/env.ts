@@ -73,6 +73,27 @@ const envSchema = z.object({
   NVIDIA_MODEL_ALT: z.string().default("openai/gpt-oss-120b"),
   NVIDIA_MODEL_ALT2: z.string().default("meta/llama-3.3-70b-instruct"),
 
+  /** Explicit provider preference — matched first when key is present (openai, anthropic, gemini, groq, deepseek, openrouter, nvidia, …) */
+  AI_PROVIDER: z.string().optional(),
+
+  OPENAI_API_KEY: z.string().optional(),
+  OPENAI_BASE_URL: z.string().default("https://api.openai.com/v1"),
+  OPENAI_MODEL: z.string().default("gpt-4o-mini"),
+
+  ANTHROPIC_API_KEY: z.string().optional(),
+  ANTHROPIC_MODEL: z.string().default("claude-haiku-4-5-20251001"),
+
+  GEMINI_API_KEY: z.string().optional(),
+  GEMINI_MODEL: z.string().default("gemini-2.0-flash"),
+
+  DEEPSEEK_API_KEY: z.string().optional(),
+  DEEPSEEK_BASE_URL: z.string().default("https://api.deepseek.com/v1"),
+  DEEPSEEK_MODEL: z.string().default("deepseek-chat"),
+
+  OPENROUTER_API_KEY: z.string().optional(),
+  OPENROUTER_BASE_URL: z.string().default("https://openrouter.ai/api/v1"),
+  OPENROUTER_MODEL: z.string().default("meta-llama/llama-3.3-70b-instruct:free"),
+
   GROQ_API_KEY: z.string().optional(),
   GROQ_BASE_URL: z.string().default("https://api.groq.com/openai/v1"),
   GROQ_MODEL: z.string().default("llama-3.3-70b-versatile"),
@@ -84,6 +105,21 @@ const envSchema = z.object({
   SAMBANOVA_API_KEY: z.string().optional(),
   SAMBANOVA_BASE_URL: z.string().default("https://api.sambanova.ai/v1"),
   SAMBANOVA_MODEL: z.string().default("Meta-Llama-3.3-70B-Instruct"),
+
+  TOGETHER_API_KEY: z.string().optional(),
+  TOGETHER_BASE_URL: z.string().default("https://api.together.xyz/v1"),
+  TOGETHER_MODEL: z.string().default("meta-llama/Llama-3.3-70B-Instruct-Turbo"),
+
+  MISTRAL_API_KEY: z.string().optional(),
+  MISTRAL_BASE_URL: z.string().default("https://api.mistral.ai/v1"),
+  MISTRAL_MODEL: z.string().default("mistral-small-latest"),
+
+  XAI_API_KEY: z.string().optional(),
+  XAI_BASE_URL: z.string().default("https://api.x.ai/v1"),
+  XAI_MODEL: z.string().default("grok-2-latest"),
+
+  OLLAMA_BASE_URL: z.string().optional(),
+  OLLAMA_MODEL: z.string().default("llama3.3"),
 
   AI_TIMEOUT_MS: z.coerce.number().default(45000),
   AI_MAX_TOKENS: z.coerce.number().default(1024),
@@ -107,8 +143,26 @@ export function getEnv(): HatchEnv {
       .join("; ");
     throw new Error(`Invalid environment: ${msg}`);
   }
-  if (!parsed.data.NVIDIA_API_KEY && !parsed.data.GROQ_API_KEY) {
-    throw new Error("At least NVIDIA_API_KEY or GROQ_API_KEY is required");
+  const d = parsed.data;
+  const hasAiKey = Boolean(
+    d.NVIDIA_API_KEY ||
+      d.OPENAI_API_KEY ||
+      d.ANTHROPIC_API_KEY ||
+      d.GEMINI_API_KEY ||
+      d.GROQ_API_KEY ||
+      d.DEEPSEEK_API_KEY ||
+      d.OPENROUTER_API_KEY ||
+      d.CEREBRAS_API_KEY ||
+      d.SAMBANOVA_API_KEY ||
+      d.TOGETHER_API_KEY ||
+      d.MISTRAL_API_KEY ||
+      d.XAI_API_KEY ||
+      d.OLLAMA_BASE_URL,
+  );
+  if (!hasAiKey) {
+    throw new Error(
+      "At least one AI provider is required (OPENAI, ANTHROPIC, GEMINI, GROQ, DEEPSEEK, OPENROUTER, NVIDIA, …)",
+    );
   }
   if (
     !parsed.data.REDIS_URL &&

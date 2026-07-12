@@ -8,8 +8,12 @@ export async function registerAiRoutes(app: FastifyInstance): Promise<void> {
   app.get(
     "/api/ai/health",
     async () => {
+      const client = getAiClient();
       return {
-        providers: getAiClient().health(),
+        providers: client.health(),
+        configured: client.listProviders().map((p) => p.id),
+        priority: client.listProviders().map((p) => ({ id: p.id, label: p.label, model: p.model })),
+        explicitProvider: getEnv().AI_PROVIDER ?? null,
         timeoutMs: getEnv().AI_TIMEOUT_MS,
       };
     },

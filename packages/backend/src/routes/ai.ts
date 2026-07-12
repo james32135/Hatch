@@ -104,6 +104,7 @@ export async function registerAiRoutes(app: FastifyInstance): Promise<void> {
       const body = req.body as {
         messages?: Array<{ role: "user" | "assistant"; content: string }>;
         childId?: string;
+        notionalUsd?: number;
       };
       if (!body.messages?.length) {
         throw new HatchError("invalid_body", "messages required", 400);
@@ -124,7 +125,64 @@ export async function registerAiRoutes(app: FastifyInstance): Promise<void> {
         childId: body.childId,
         wallet: req.user.wallet,
         messages: body.messages,
+        notionalUsd: body.notionalUsd,
       });
+    },
+  );
+
+  /** Investment Copilot — SSE progress + token stream. */
+  app.post(
+    "/api/ai/agent/stream",
+    { preHandler: [app.authenticate] },
+    async (req, reply) => {
+      requireParent(req);
+      const body = req.body as {
+        messages?: Array<{ role: "user" | "assistant"; content: string }>;
+        childId?: string;
+        notionalUsd?: number;
+      };
+      if (!body.messages?.length) {
+        throw new HatchError("invalid_body", "messages required", 400);
+      }
+      if (body.childId) {
+        await assertChildAccess(req, body.childId);
+      }
+      const { resolveProfile } = await import("../config/environment.js");
+      const { getEnv } = await import("../config/env.js");
+      const profile = resolveProfile(
+        (req.headers["x-hatch-profile"] as string | undefined) ??
+          getEnv().HATCH_DEFAULT_PROFILE,
+      );
+
+      reply.hijack();
+      reply.raw.writeHead(200, {
+        "Content-Type": "text/event-stream; charset=utf-8",
+        "Cache-Control": "no-cache, no-transform",
+        Connection: "keep-alive",
+        "X-Accel-Buffering": "no",
+      });
+
+      const send = (event: string, data: unknown) => {
+        reply.raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+      };
+
+      const { runInvestmentAgentStream } = await import(
+        "../services/investmentAgent.js"
+      );
+
+      await runInvestmentAgentStream(
+        {
+          profile,
+          parentId: req.user.sub,
+          childId: body.childId,
+          wallet: req.user.wallet,
+          messages: body.messages,
+          notionalUsd: body.notionalUsd,
+        },
+        (ev) => send(ev.type, ev.data),
+      );
+
+      reply.raw.end();
     },
   );
 }

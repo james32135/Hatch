@@ -91,3 +91,103 @@ export const api = {
     }),
   del: <T = any>(path: string, opts?: { auth?: boolean }) => apiRequest<T>(path, { method: "DELETE", ...opts }),
 };
+
+export type AgentProgressPayload = {
+  step: string;
+  label: string;
+  status: "active" | "done";
+  detail?: string;
+};
+
+export type AgentDonePayload = {
+  content: string;
+  thinking?: string;
+  sources?: string[];
+  followUps?: string[];
+  marketsTop?: unknown[];
+  provider?: string;
+  model?: string;
+  latencyMs?: number;
+  contextMs?: number;
+};
+
+export type AgentStreamHandlers = {
+  onProgress?: (data: AgentProgressPayload) => void;
+  onThinking?: (delta: string) => void;
+  onToken?: (delta: string) => void;
+  onDone?: (data: AgentDonePayload) => void;
+  onError?: (message: string) => void;
+};
+
+/** SSE stream for Investment Copilot — progress, thinking, and live tokens. */
+export async function streamAgent(
+  body: {
+    childId?: string;
+    notionalUsd?: number;
+    messages: Array<{ role: "user" | "assistant"; content: string }>;
+  },
+  handlers: AgentStreamHandlers,
+  signal?: AbortSignal,
+): Promise<void> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    "X-HATCH-Profile": getProfile(),
+  };
+  const jwt = getJwt();
+  if (jwt) headers.Authorization = `Bearer ${jwt}`;
+
+  const res = await fetch(`${API_BASE}/api/ai/agent/stream`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body),
+    signal,
+  });
+
+  if (!res.ok) {
+    const ct = res.headers.get("content-type") || "";
+    const errBody = ct.includes("application/json")
+      ? await res.json().catch(() => null)
+      : await res.text().catch(() => null);
+    throw makeError(res.status, errBody, `Agent stream failed: ${res.status}`);
+  }
+
+  const reader = res.body?.getReader();
+  if (!reader) throw new Error("No response stream");
+
+  const dec = new TextDecoder();
+  let buf = "";
+
+  const dispatch = (block: string) => {
+    const lines = block.split("\n");
+    let event = "message";
+    let data = "";
+    for (const line of lines) {
+      if (line.startsWith("event:")) event = line.slice(6).trim();
+      else if (line.startsWith("data:")) data += line.slice(5).trim();
+    }
+    if (!data) return;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(data);
+    } catch {
+      return;
+    }
+    if (event === "progress") handlers.onProgress?.(parsed as AgentProgressPayload);
+    else if (event === "thinking") handlers.onThinking?.((parsed as { delta: string }).delta);
+    else if (event === "token") handlers.onToken?.((parsed as { delta: string }).delta);
+    else if (event === "done") handlers.onDone?.(parsed as AgentDonePayload);
+    else if (event === "error") handlers.onError?.((parsed as { message: string }).message);
+  };
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    let idx: number;
+    while ((idx = buf.indexOf("\n\n")) >= 0) {
+      dispatch(buf.slice(0, idx));
+      buf = buf.slice(idx + 2);
+    }
+  }
+  if (buf.trim()) dispatch(buf);
+}

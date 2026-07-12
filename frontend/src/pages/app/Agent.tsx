@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowUp,
@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { api } from "@/lib/api";
+import { api, streamAgent, type AgentProgressPayload } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { fmtUsd } from "@/lib/format";
@@ -77,6 +77,59 @@ function StreamingDots() {
         />
       ))}
     </span>
+  );
+}
+
+const STEP_ORDER = ["markets", "portfolio", "orders", "context", "thinking", "writing"] as const;
+
+function AgentRunProgress({
+  steps,
+  thinking,
+  streaming,
+}: {
+  steps: Record<string, AgentProgressPayload>;
+  thinking: string;
+  streaming: string;
+}) {
+  const ordered = STEP_ORDER.map((id) => steps[id]).filter(Boolean) as AgentProgressPayload[];
+  const visible = ordered.length
+    ? ordered
+    : [{ step: "markets", label: "Connecting to Copilot…", status: "active" as const }];
+
+  return (
+    <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] px-4 py-3">
+      <div className="mb-2 flex items-center gap-2 text-xs text-white/45">
+        <StreamingDots />
+        <span>Live SoDEX read in progress</span>
+      </div>
+      <ul className="space-y-1.5">
+        {visible.map((s) => (
+          <li key={s.step} className="flex items-start gap-2 text-[13px]">
+            <span
+              className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${
+                s.status === "done"
+                  ? "bg-emerald-400"
+                  : s.status === "active"
+                    ? "bg-sky-400 animate-pulse"
+                    : "bg-white/20"
+              }`}
+            />
+            <span className={s.status === "done" ? "text-white/55" : "text-white/80"}>
+              {s.label}
+              {s.detail ? (
+                <span className="ml-1.5 text-[11px] text-white/35">· {s.detail}</span>
+              ) : null}
+            </span>
+          </li>
+        ))}
+      </ul>
+      {thinking && !streaming && (
+        <div className="mt-3 rounded-xl border border-white/[0.06] bg-black/30 px-3 py-2">
+          <div className="text-[10px] uppercase tracking-wider text-white/30">Thinking</div>
+          <p className="mt-1 line-clamp-4 text-xs leading-relaxed text-white/45">{thinking}</p>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -166,10 +219,14 @@ export default function Agent() {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Msg[]>([]);
   const [panelOpen, setPanelOpen] = useState(false);
-  const [displayed, setDisplayed] = useState("");
   const [activeGroup, setActiveGroup] = useState("investment");
+  const [running, setRunning] = useState(false);
+  const [runSteps, setRunSteps] = useState<Record<string, AgentProgressPayload>>({});
+  const [thinking, setThinking] = useState("");
+  const [streaming, setStreaming] = useState("");
   const endRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   const children = useQuery({
     queryKey: ["children"],
@@ -190,43 +247,79 @@ export default function Agent() {
     refetchInterval: 45_000,
   });
 
-  const ask = useMutation({
-    mutationFn: async (text: string) => {
-      const nextMsgs = [...messages, { role: "user" as const, content: text }];
-      setMessages(nextMsgs);
-      setDisplayed("");
-      return api.post<any>("/api/ai/agent", {
-        childId,
-        messages: nextMsgs.map((m) => ({ role: m.role, content: m.content })),
-      });
-    },
-    onSuccess: (data) => {
-      const full = String(data.content || "");
-      setMessages((prev) => [
-        ...prev,
+  const submit = async (text: string) => {
+    const t = text.trim();
+    if (!t || running) return;
+    setInput("");
+
+    const nextMsgs: Msg[] = [...messages, { role: "user", content: t }];
+    setMessages(nextMsgs);
+    setRunning(true);
+    setRunSteps({});
+    setThinking("");
+    setStreaming("");
+
+    const notionalMatch = t.match(/\$\s*(\d+(?:\.\d{1,2})?)/);
+    const notionalUsd = notionalMatch ? Number(notionalMatch[1]) : undefined;
+
+    abortRef.current?.abort();
+    const ac = new AbortController();
+    abortRef.current = ac;
+
+    try {
+      await streamAgent(
         {
-          role: "assistant",
-          content: full,
-          sources: data.sources,
-          followUps: data.followUps,
-          marketsTop: data.marketsTop,
+          childId,
+          notionalUsd: Number.isFinite(notionalUsd) ? notionalUsd : undefined,
+          messages: nextMsgs.map((m) => ({ role: m.role, content: m.content })),
         },
-      ]);
-      let i = 0;
-      const step = Math.max(2, Math.floor(full.length / 80));
-      const tick = () => {
-        i = Math.min(full.length, i + step);
-        setDisplayed(full.slice(0, i));
-        if (i < full.length) requestAnimationFrame(tick);
-      };
-      requestAnimationFrame(tick);
-    },
-    onError: (e: any) => toast.error(e?.message || "Copilot unavailable"),
-  });
+        {
+          onProgress: (p) => {
+            setRunSteps((prev) => ({ ...prev, [p.step]: p }));
+          },
+          onThinking: (delta) => {
+            setThinking((prev) => prev + delta);
+          },
+          onToken: (delta) => {
+            setStreaming((prev) => prev + delta);
+          },
+          onDone: (data) => {
+            setMessages((prev) => [
+              ...prev,
+              {
+                role: "assistant",
+                content: data.content,
+                sources: data.sources,
+                followUps: data.followUps,
+                marketsTop: data.marketsTop as Msg["marketsTop"],
+              },
+            ]);
+            setStreaming("");
+            setThinking("");
+            setRunSteps({});
+          },
+          onError: (message) => {
+            toast.error(message || "Copilot unavailable");
+          },
+        },
+        ac.signal,
+      );
+    } catch (e: any) {
+      if (e?.name !== "AbortError") {
+        toast.error(e?.message || "Copilot unavailable");
+      }
+    } finally {
+      setRunning(false);
+      setStreaming("");
+      setThinking("");
+      setRunSteps({});
+      abortRef.current = null;
+    }
+  };
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [messages, displayed, ask.isPending]);
+  }, [messages, streaming, thinking, running, runSteps]);
 
   useEffect(() => {
     const el = textareaRef.current;
@@ -235,12 +328,7 @@ export default function Agent() {
     el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
   }, [input]);
 
-  const submit = (text: string) => {
-    const t = text.trim();
-    if (!t || ask.isPending) return;
-    setInput("");
-    ask.mutate(t);
-  };
+  useEffect(() => () => abortRef.current?.abort(), []);
 
   const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant");
   const board = lastAssistant?.marketsTop?.length
@@ -290,14 +378,7 @@ export default function Agent() {
             ) : (
               <div className="mx-auto w-full max-w-2xl space-y-7 py-4 pb-6">
                 <AnimatePresence initial={false}>
-                  {messages.map((m, i) => {
-                    const isLastAssistant =
-                      m.role === "assistant" && i === messages.length - 1;
-                    const body =
-                      isLastAssistant && displayed && displayed.length < m.content.length
-                        ? displayed
-                        : m.content;
-                    return (
+                  {messages.map((m, i) => (
                       <motion.div
                         key={`${m.role}-${i}`}
                         initial={{ opacity: 0, y: 6 }}
@@ -312,7 +393,7 @@ export default function Agent() {
                         ) : (
                           <div>
                             <div className="prose prose-invert prose-p:my-3 prose-p:leading-relaxed prose-headings:mb-2 prose-headings:mt-5 prose-headings:tracking-tight prose-pre:rounded-xl prose-pre:bg-black/50 prose-table:text-sm max-w-none text-[15px] text-white/88">
-                              <ReactMarkdown remarkPlugins={[remarkGfm]}>{body}</ReactMarkdown>
+                              <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
                             </div>
                             {m.sources?.length ? (
                               <div className="mt-4 flex flex-wrap gap-1.5">
@@ -344,13 +425,21 @@ export default function Agent() {
                           </div>
                         )}
                       </motion.div>
-                    );
-                  })}
+                    ))}
                 </AnimatePresence>
-                {ask.isPending && (
-                  <div className="flex items-center gap-3 text-sm text-white/45">
-                    <StreamingDots />
-                    Reading live SoDEX markets…
+                {running && !streaming && (
+                  <AgentRunProgress
+                    steps={runSteps}
+                    thinking={thinking}
+                    streaming={streaming}
+                  />
+                )}
+                {streaming && (
+                  <div>
+                    <div className="prose prose-invert prose-p:my-3 prose-p:leading-relaxed max-w-none text-[15px] text-white/88">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{streaming}</ReactMarkdown>
+                    </div>
+                    <span className="mt-1 inline-block h-4 w-0.5 animate-pulse bg-emerald-300/80" />
                   </div>
                 )}
                 <div ref={endRef} />
@@ -378,7 +467,7 @@ export default function Agent() {
                 />
                 <Button
                   className="mb-0.5 h-10 w-10 shrink-0 rounded-2xl bg-emerald-400 p-0 text-black hover:bg-emerald-300 disabled:opacity-40"
-                  disabled={ask.isPending || !input.trim()}
+                  disabled={running || !input.trim()}
                   onClick={() => submit(input)}
                   aria-label="Send"
                 >

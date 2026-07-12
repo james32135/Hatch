@@ -43,6 +43,16 @@ export interface ChatResult {
   raw?: unknown;
 }
 
+export type StreamChunk = { type: "token" | "thinking"; text: string };
+
+export type StreamChatResult = {
+  text: string;
+  thinking: string;
+  providerId: AiProviderId;
+  model: string;
+  latencyMs: number;
+};
+
 function buildProviders(env: HatchEnv): AiProviderConfig[] {
   const list: AiProviderConfig[] = [];
   if (env.NVIDIA_API_KEY) {
@@ -236,6 +246,77 @@ export class AiClient {
         breaker.recordSuccess();
         return {
           text,
+          providerId: provider.id,
+          model: provider.model,
+          latencyMs: Date.now() - started,
+        };
+      } catch (err) {
+        breaker.recordFailure();
+        errors.push(`${provider.id}: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+    throw new Error(`Stream failed on all providers: ${errors.join(" | ")}`);
+  }
+
+  /** Stream tokens + optional thinking deltas to caller; returns full text at end. */
+  async streamChatEvents(
+    req: Omit<ChatRequest, "stream">,
+    onChunk: (chunk: StreamChunk) => void,
+  ): Promise<StreamChatResult> {
+    const started = Date.now();
+    const errors: string[] = [];
+    for (const provider of this.providers) {
+      const breaker = this.breakers.get(provider.id)!;
+      if (!breaker.allow()) continue;
+      try {
+        const client = new OpenAI({
+          apiKey: provider.apiKey,
+          baseURL: provider.baseURL,
+          timeout: req.timeoutMs ?? this.env.AI_TIMEOUT_MS,
+        });
+        const extra = this.extraBody(provider, req) ?? {};
+        const stream = (await client.chat.completions.create({
+          model: provider.model,
+          messages: req.messages,
+          temperature: req.temperature ?? 0.2,
+          max_tokens: req.maxTokens ?? this.env.AI_MAX_TOKENS,
+          stream: true,
+          ...(req.jsonMode ? { response_format: { type: "json_object" as const } } : {}),
+          ...extra,
+        })) as AsyncIterable<{
+          choices: Array<{
+            delta?: {
+              content?: string | null;
+              reasoning_content?: string | null;
+            };
+          }>;
+        }>;
+        let text = "";
+        let thinking = "";
+        for await (const chunk of stream) {
+          const delta = chunk.choices[0]?.delta;
+          if (delta?.reasoning_content) {
+            thinking += delta.reasoning_content;
+            onChunk({ type: "thinking", text: delta.reasoning_content });
+          }
+          if (delta?.content) {
+            text += delta.content;
+            onChunk({ type: "token", text: delta.content });
+          }
+        }
+        if (!text.trim()) {
+          const fallback = await this.callProvider(provider, {
+            ...req,
+            stream: false,
+          });
+          text = fallback.content ?? "";
+          if (text) onChunk({ type: "token", text });
+        }
+        if (!text.trim()) throw new Error("empty stream content");
+        breaker.recordSuccess();
+        return {
+          text,
+          thinking,
           providerId: provider.id,
           model: provider.model,
           latencyMs: Date.now() - started,

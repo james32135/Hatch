@@ -3,6 +3,7 @@ import { getAiClient } from "../clients/ai/index.js";
 import { HatchError } from "../lib/errors.js";
 import { getEnv } from "../config/env.js";
 import { assertChildAccess, requireParent } from "../lib/childAccess.js";
+import { logger } from "../lib/logger.js";
 
 export async function registerAiRoutes(app: FastifyInstance): Promise<void> {
   app.get(
@@ -139,6 +140,8 @@ export async function registerAiRoutes(app: FastifyInstance): Promise<void> {
     "/api/ai/agent/stream",
     { preHandler: [app.authenticate] },
     async (req, reply) => {
+      const startedAt = Date.now();
+      const traceId = req.id;
       requireParent(req);
       const body = req.body as {
         messages?: Array<{ role: "user" | "assistant"; content: string }>;
@@ -158,35 +161,102 @@ export async function registerAiRoutes(app: FastifyInstance): Promise<void> {
           getEnv().HATCH_DEFAULT_PROFILE,
       );
 
-      reply.hijack();
-      reply.raw.writeHead(200, {
+      const origin = req.headers.origin;
+      const allowedOrigins = getEnv()
+        .CORS_ALLOWED_ORIGINS.split(",")
+        .map((value) => value.trim())
+        .filter(Boolean);
+      const accessControlAllowOrigin = allowedOrigins.includes("*")
+        ? "*"
+        : origin && allowedOrigins.includes(origin)
+          ? origin
+          : undefined;
+      const responseHeaders: Record<string, string> = {
         "Content-Type": "text/event-stream; charset=utf-8",
         "Cache-Control": "no-cache, no-transform",
         Connection: "keep-alive",
         "X-Accel-Buffering": "no",
-      });
+        "X-HATCH-Trace-Id": traceId,
+        "Access-Control-Expose-Headers": "X-HATCH-Trace-Id",
+      };
+      if (accessControlAllowOrigin) {
+        responseHeaders["Access-Control-Allow-Origin"] =
+          accessControlAllowOrigin;
+        responseHeaders["Access-Control-Allow-Credentials"] = "true";
+        responseHeaders.Vary = "Origin";
+      }
 
+      logger.info(
+        {
+          traceId,
+          method: req.method,
+          url: req.url,
+          origin,
+          profile: profile.id,
+          role: req.user.role,
+          childId: body.childId,
+          messageCount: body.messages.length,
+          lastUserMessage:
+            [...body.messages].reverse().find((message) => message.role === "user")
+              ?.content ?? null,
+        },
+        "copilot stream request started",
+      );
+
+      reply.hijack();
+      reply.raw.writeHead(200, responseHeaders);
+
+      let eventCount = 0;
       const send = (event: string, data: unknown) => {
+        eventCount += 1;
         reply.raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
       };
 
-      const { runInvestmentAgentStream } = await import(
-        "../services/investmentAgent.js"
-      );
+      try {
+        const { runInvestmentAgentStream } = await import(
+          "../services/investmentAgent.js"
+        );
 
-      await runInvestmentAgentStream(
-        {
-          profile,
-          parentId: req.user.sub,
-          childId: body.childId,
-          wallet: req.user.wallet,
-          messages: body.messages,
-          notionalUsd: body.notionalUsd,
-        },
-        (ev) => send(ev.type, ev.data),
-      );
+        await runInvestmentAgentStream(
+          {
+            profile,
+            parentId: req.user.sub,
+            childId: body.childId,
+            wallet: req.user.wallet,
+            messages: body.messages,
+            notionalUsd: body.notionalUsd,
+          },
+          (ev) => send(ev.type, ev.data),
+        );
 
-      reply.raw.end();
+        logger.info(
+          {
+            traceId,
+            status: 200,
+            eventCount,
+            durationMs: Date.now() - startedAt,
+          },
+          "copilot stream request completed",
+        );
+      } catch (error) {
+        logger.error(
+          {
+            traceId,
+            status: 500,
+            eventCount,
+            durationMs: Date.now() - startedAt,
+            error: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
+          },
+          "copilot stream request failed",
+        );
+        send("error", {
+          message: "Copilot stream failed unexpectedly. Please retry.",
+          traceId,
+        });
+      } finally {
+        reply.raw.end();
+      }
     },
   );
 }

@@ -1,10 +1,9 @@
 /**
- * Portfolio USD projection from live SoSoValue + SoDEX account state/balances.
- * Never invents prices — fails closed if snapshot unavailable for unknown assets.
+ * Portfolio USD projection from SoSoValue (when available) + SoDEX tickers/account state.
+ * SoDEX tickers are the live fallback when SoSoValue snapshot is down.
  * Empty balances → totalUsd: 0 (not null).
  */
 import { getSoSoValueClient } from "../clients/sosovalue.js";
-import { HatchError } from "../lib/errors.js";
 
 export interface PortfolioProjection {
   totalUsd: number | null;
@@ -14,7 +13,7 @@ export interface PortfolioProjection {
     priceUsd: number | null;
     valueUsd: number | null;
   }>;
-  source: "sosovalue+sodex";
+  source: "sosovalue+sodex" | "sodex";
   pricedAt: string;
   warnings: string[];
 }
@@ -128,18 +127,17 @@ export function extractBalances(state: unknown): Record<string, number> {
   return out;
 }
 
-/** Merge multiple SoDEX payloads (state + balances) into one qty map */
+/** Merge multiple SoDEX payloads — never sum state+balances (same account, duplicate rows). */
 export function mergeBalanceSources(
   ...sources: Array<unknown | null | undefined>
 ): Record<string, number> {
-  const out: Record<string, number> = {};
-  for (const src of sources) {
-    const part = extractBalances(src);
-    for (const [sym, qty] of Object.entries(part)) {
-      out[sym] = (out[sym] ?? 0) + qty;
-    }
-  }
-  return out;
+  const parsed = sources
+    .map((src) => extractBalances(src))
+    .filter((part) => Object.keys(part).length > 0);
+  if (!parsed.length) return {};
+  return parsed.reduce((best, part) =>
+    Object.keys(part).length > Object.keys(best).length ? part : best,
+  );
 }
 
 /** Pull USD prices from SoSoValue market snapshot — structure varies; fail soft per asset */
@@ -218,30 +216,57 @@ export function resolvePriceUsd(
   return null;
 }
 
+/** Merge SoDEX market tickers into a price map (vault base symbols + SOSO aliases). */
+export function supplementPricesFromSodexTickers(
+  prices: Record<string, number>,
+  tickers: unknown,
+): void {
+  const list = Array.isArray((tickers as { data?: unknown }).data)
+    ? (tickers as { data: unknown[] }).data
+    : Array.isArray(tickers)
+      ? tickers
+      : [];
+  for (const t of list) {
+    const row = t as Record<string, unknown>;
+    const sym = String(row.symbol ?? "");
+    const px = Number(row.lastPx ?? row.bidPx ?? 0);
+    if (!sym || !(px > 0)) continue;
+    const base = sym.split("_")[0];
+    if (base && prices[base] === undefined) prices[base] = px;
+    if (prices[sym] === undefined) prices[sym] = px;
+    if (/^w?soso$/i.test(base)) {
+      if (prices.SOSO === undefined) prices.SOSO = px;
+      if (prices.WSOSO === undefined) prices.WSOSO = px;
+      if (prices.soso === undefined) prices.soso = px;
+    }
+  }
+}
+
 export async function projectPortfolioUsd(
   sodexAccountState: unknown,
   sodexBalances?: unknown,
   profileId?: string | null,
 ): Promise<PortfolioProjection> {
   const warnings: string[] = [];
-  let snapshot: unknown;
+  let snapshotOk = false;
+  const prices = extractPrices(null);
+
   try {
-    snapshot = await getSoSoValueClient().marketSnapshot();
+    const snapshot = await getSoSoValueClient().marketSnapshot();
+    Object.assign(prices, extractPrices(snapshot));
+    snapshotOk = true;
   } catch (err) {
-    throw new HatchError(
-      "unavailable",
-      `SoSoValue market snapshot failed: ${err instanceof Error ? err.message : String(err)}`,
-      502,
+    warnings.push(
+      `SoSoValue market snapshot unavailable: ${err instanceof Error ? err.message : String(err)}`,
     );
   }
 
   const balances = mergeBalanceSources(sodexBalances, sodexAccountState);
-  const prices = extractPrices(snapshot);
   // Stablecoin / vault quote peg — not invented market prices
   for (const peg of ["USDC", "vUSDC", "USDT", "vUSDT"]) {
     if (prices[peg] === undefined) prices[peg] = 1;
   }
-  // Supplement with SoDEX lastPx for vault coins SoSoValue may omit (e.g. WSOSO)
+  // SoDEX lastPx for vault coins (primary when SoSoValue snapshot is down)
   try {
     const { createSodexClient } = await import("../clients/sodex.js");
     const { resolveProfile } = await import("../config/environment.js");
@@ -250,27 +275,11 @@ export async function projectPortfolioUsd(
       resolveProfile(profileId ?? getEnv().HATCH_DEFAULT_PROFILE),
     );
     const tickers = await sodex.marketsTickers();
-    const list = Array.isArray((tickers as any)?.data)
-      ? (tickers as any).data
-      : Array.isArray(tickers)
-        ? tickers
-        : [];
-    for (const t of list) {
-      const sym = String(t.symbol ?? "");
-      const px = Number(t.lastPx ?? t.bidPx ?? 0);
-      if (!sym || !(px > 0)) continue;
-      const base = sym.split("_")[0];
-      if (base && prices[base] === undefined) prices[base] = px;
-      if (prices[sym] === undefined) prices[sym] = px;
-      // Alias common display forms (WSOSO ↔ SOSO)
-      if (/^w?soso$/i.test(base)) {
-        if (prices.SOSO === undefined) prices.SOSO = px;
-        if (prices.WSOSO === undefined) prices.WSOSO = px;
-        if (prices.soso === undefined) prices.soso = px;
-      }
-    }
-  } catch {
-    /* SoDEX ticker supplement is best-effort */
+    supplementPricesFromSodexTickers(prices, tickers);
+  } catch (err) {
+    warnings.push(
+      `SoDEX ticker supplement failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
   }
   const components: PortfolioProjection["components"] = [];
   let total = 0;
@@ -299,7 +308,7 @@ export async function projectPortfolioUsd(
   return {
     totalUsd,
     components,
-    source: "sosovalue+sodex",
+    source: snapshotOk ? "sosovalue+sodex" : "sodex",
     pricedAt: new Date().toISOString(),
     warnings,
   };

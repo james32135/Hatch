@@ -46,7 +46,6 @@ export function InvestmentReceipt({
   const notional = orderNotionalUsd(order);
   const orderId = order.sodexOrderId || order.clOrdId || order.id;
   const at = order.at || order.createdAt;
-  const vcLog = live.explorer?.log;
   const sodexUrl = sodexAppUrl || live.config?.sodex?.appUrl;
 
   const copy = () => {
@@ -94,11 +93,7 @@ export function InvestmentReceipt({
                   View on SoDEX <ExternalLink className="h-3 w-3" />
                 </a>
               )}
-              {vcLog && (
-                <a href={vcLog} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sky-200/80 hover:text-sky-100">
-                  View on ValueChain <ExternalLink className="h-3 w-3" />
-                </a>
-              )}
+              {/* HATCHLog contract page is for Transparency only — not an order receipt */}
             </div>
           </div>
         </AdvancedDetails>

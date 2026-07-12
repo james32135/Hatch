@@ -48,6 +48,32 @@ export function stripSodexSignPrefix(apiSign: string): Hex {
   throw new HatchError("sig_verify_failed", "Invalid X-API-Sign length", 401);
 }
 
+/** MetaMask often returns v=27|28; SoDEX wire expects v=0|1. */
+export function normalizeEcdsaV(signature: Hex): Hex {
+  const raw = signature.startsWith("0x") ? signature.slice(2) : signature;
+  if (raw.length !== 130) return signature;
+  let v = Number.parseInt(raw.slice(128, 130), 16);
+  if (v >= 27) v -= 27;
+  return `0x${raw.slice(0, 128)}${v.toString(16).padStart(2, "0")}` as Hex;
+}
+
+/**
+ * Canonical SoDEX wire signature: 0x01 + r/s/v(0|1).
+ * Always run before verify + before gateway forward so MetaMask v=27/28 cannot cause FAILED.
+ */
+export function toSodexWireApiSign(apiSign: string): string {
+  const raw = apiSign.startsWith("0x") ? apiSign.slice(2) : apiSign;
+  let ecdsa: Hex;
+  if (raw.length === 132 && raw.startsWith("01")) {
+    ecdsa = `0x${raw.slice(2)}` as Hex;
+  } else if (raw.length === 130) {
+    ecdsa = `0x${raw}` as Hex;
+  } else {
+    throw new HatchError("sig_verify_failed", "Invalid X-API-Sign length", 401);
+  }
+  return `0x01${normalizeEcdsaV(ecdsa).slice(2)}`;
+}
+
 export async function recoverExchangeSigner(input: {
   scope: "spot" | "futures";
   chainId: number;

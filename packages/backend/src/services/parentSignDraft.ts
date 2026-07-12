@@ -72,6 +72,18 @@ export interface ParentSignDraft {
     side: string;
     quantity: string;
     price: string;
+    route?: {
+      why: string;
+      symbol: string;
+      marketId: number;
+      bestAsk: number | null;
+      askDepthUsd: number;
+      score: number;
+      maxSlippageBps: number;
+      referenceAsk: number | null;
+      scannedAt: string;
+      considered: unknown[];
+    };
   };
   legs: Array<{
     symbol: string;
@@ -417,6 +429,19 @@ export function draftRoutedParentSign(input: {
       side: "BUY",
       quantity: primary.quantity,
       price: primary.price,
+      // Persisted on SignedOrder for reproducible execution evidence
+      route: {
+        why: route.why,
+        symbol: route.market.symbol,
+        marketId: route.market.marketId,
+        bestAsk: route.market.bestAsk,
+        askDepthUsd: route.market.askDepthUsd,
+        score: route.market.score,
+        maxSlippageBps: route.maxSlippageBps,
+        referenceAsk: route.referenceAsk,
+        scannedAt: route.scannedAt,
+        considered: route.considered,
+      },
     },
     legs,
     handoffRef: {

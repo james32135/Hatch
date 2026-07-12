@@ -10,6 +10,7 @@ import { HatchError } from "../lib/errors.js";
 import {
   assertMasterWalletSigner,
   extractAccountId,
+  toSodexWireApiSign,
 } from "../services/sodexSign.js";
 import { assertNotionalCap } from "../services/notional.js";
 import { assertRelayRateLimit } from "../services/relayRateLimit.js";
@@ -46,6 +47,21 @@ const relaySchema = z.object({
   side: z.string().optional(),
   quantity: z.string().optional(),
   price: z.string().optional(),
+  /** Liquidity route evidence from sign-draft (why/score/depth/slippage). */
+  route: z
+    .object({
+      why: z.string().optional(),
+      symbol: z.string().optional(),
+      marketId: z.number().optional(),
+      bestAsk: z.union([z.number(), z.string(), z.null()]).optional(),
+      askDepthUsd: z.number().optional(),
+      score: z.number().optional(),
+      maxSlippageBps: z.number().optional(),
+      referenceAsk: z.union([z.number(), z.string(), z.null()]).optional(),
+      scannedAt: z.string().optional(),
+      considered: z.array(z.unknown()).optional(),
+    })
+    .optional(),
 });
 
 function profileFromRequest(req: { headers: Record<string, unknown> }) {
@@ -219,12 +235,15 @@ export async function registerSodexRoutes(app: FastifyInstance): Promise<void> {
         );
       }
 
+      // Normalize MetaMask v=27/28 → SoDEX v=0/1 before verify + forward (never re-sign).
+      const wireApiSign = toSodexWireApiSign(parsed.data.apiSign);
+
       await assertMasterWalletSigner({
         scope: parsed.data.scope,
         chainId,
         payloadHash: parsed.data.payloadHash as Hex,
         nonce: parsed.data.apiNonce,
-        apiSign: parsed.data.apiSign,
+        apiSign: wireApiSign,
         expectedWallet: req.user.wallet,
         expectedApiKeyPubkey: parsed.data.apiKeyPubkey,
       });
@@ -282,8 +301,11 @@ export async function registerSodexRoutes(app: FastifyInstance): Promise<void> {
             price: parsed.data.price ?? "0",
             payloadHash: parsed.data.payloadHash,
             nonce: parsed.data.apiNonce,
-            signature: parsed.data.apiSign,
+            signature: wireApiSign,
             status: "PENDING",
+            sodexResponseJson: parsed.data.route
+              ? ({ routeEvidence: parsed.data.route } as object)
+              : undefined,
           },
         });
         orderId = row.id;
@@ -295,7 +317,7 @@ export async function registerSodexRoutes(app: FastifyInstance): Promise<void> {
         parsed.data.path,
         parsed.data.body,
         {
-          apiSign: parsed.data.apiSign,
+          apiSign: wireApiSign,
           apiNonce: parsed.data.apiNonce,
           apiKeyName: parsed.data.apiKeyName,
         },
@@ -316,20 +338,29 @@ export async function registerSodexRoutes(app: FastifyInstance): Promise<void> {
       }
 
       if (orderId) {
+        const sodexErr =
+          (result.data as { error?: string; msg?: string; message?: string } | null)?.error ||
+          (result.data as { error?: string; msg?: string; message?: string } | null)?.msg ||
+          (result.data as { error?: string; msg?: string; message?: string } | null)?.message ||
+          null;
         await prisma.signedOrder.update({
           where: { id: orderId },
           data: {
             status: hatchStatus,
             sodexOrderId: primaryLeg?.orderID ?? null,
             sodexResponseJson: {
+              ...(parsed.data.route ? { routeEvidence: parsed.data.route } : {}),
               httpStatus: result.status,
               relay: result.data,
               parsedLegs: parsedRelay.legs,
+              sodexError: sodexErr,
             } as object,
             error:
               hatchStatus === "SUBMITTED"
                 ? null
-                : `relay_rejected topCode=${parsedRelay.topCode} legCode=${primaryLeg?.code ?? "n/a"} HTTP ${result.status}`,
+                : sodexErr
+                  ? `SoDEX: ${sodexErr} (topCode=${parsedRelay.topCode} legCode=${primaryLeg?.code ?? "n/a"} HTTP ${result.status})`
+                  : `relay_rejected topCode=${parsedRelay.topCode} legCode=${primaryLeg?.code ?? "n/a"} HTTP ${result.status}`,
           },
         });
       }
@@ -376,6 +407,12 @@ export async function registerSodexRoutes(app: FastifyInstance): Promise<void> {
         });
       }
 
+      const sodexErrSurface =
+        (result.data as { error?: string; msg?: string; message?: string } | null)?.error ||
+        (result.data as { error?: string; msg?: string; message?: string } | null)?.msg ||
+        (result.data as { error?: string; msg?: string; message?: string } | null)?.message ||
+        null;
+
       return {
         relayed: true,
         status: result.status,
@@ -384,12 +421,16 @@ export async function registerSodexRoutes(app: FastifyInstance): Promise<void> {
         sodexOrderId: primaryLeg?.orderID ?? null,
         hatchStatus,
         relayAccepted: parsedRelay.accepted,
+        sodexError: sodexErrSurface,
+        routeEvidence: parsed.data.route ?? null,
         verification,
         verified: true,
         note:
           hatchStatus === "SUBMITTED"
             ? "Relay accepted by SoDEX. Fill status comes from order history / trades — never assumed from HTTP alone."
-            : "Relay was not accepted as a live order. See error / verification.",
+            : sodexErrSurface
+              ? `SoDEX rejected the order: ${sodexErrSurface}`
+              : "Relay was not accepted as a live order. See error / verification.",
       };
     },
   );

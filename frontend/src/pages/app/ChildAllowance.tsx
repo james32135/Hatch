@@ -15,6 +15,7 @@ import { ExplorerLinkCard } from "@/components/story/ExplorerLink";
 import { useInfraLive } from "@/components/story/InfraStatus";
 import { useState, useMemo } from "react";
 import { ExternalLink } from "lucide-react";
+import { toSodexWireApiSign } from "@/lib/sodexSign";
 
 export default function ChildAllowance() {
   const { childId } = useParams();
@@ -147,8 +148,8 @@ export default function ChildAllowance() {
           nonce: BigInt(td.message.nonce),
         },
       });
-      const raw = signature.startsWith("0x") ? signature.slice(2) : signature;
-      const apiSign = raw.startsWith("01") && raw.length === 132 ? `0x${raw}` : `0x01${raw}`;
+      // MetaMask v may be 27/28 — normalize to SoDEX wire 0x01+r/s/v(0|1)
+      const apiSign = toSodexWireApiSign(signature);
       const relayReq = { ...(draft.relayRequest || {}), apiSign };
       setPhase("Relay Accepted");
       return api.post<any>("/api/sodex/relay", relayReq);
@@ -241,8 +242,8 @@ export default function ChildAllowance() {
           status={statusLabel || "Pending"}
           statusTone={filled ? "ok" : canceled ? "danger" : "warn"}
           hash={v?.sodexOrderId || lastOrderId}
-          explorerUrl={live.explorer?.log}
-          networkLabel={`${live.network} · SoDEX + ValueChain`}
+          explorerUrl={v?.sodexAppUrl || live.config?.sodex?.appUrl || null}
+          networkLabel={`${live.network} · SoDEX vault (not ValueChain HATCHLog)`}
           detail={
             filled
               ? "SoDEX confirmed FILLED. Portfolio refresh uses live balances and trades."
@@ -285,17 +286,24 @@ export default function ChildAllowance() {
                     rel="noreferrer"
                     className="inline-flex items-center gap-1 text-sky-200/80 hover:text-sky-100"
                   >
-                    SoDEX <ExternalLink className="h-3 w-3" />
+                    SoDEX portfolio <ExternalLink className="h-3 w-3" />
                   </a>
                 )}
-                {live.explorer?.log && (
+                {address &&
+                  (live.network === "mainnet"
+                    ? live.config?.valuechain?.mainnet?.explorerUrl
+                    : live.config?.valuechain?.testnet?.explorerUrl) && (
                   <a
-                    href={live.explorer.log}
+                    href={`${
+                      live.network === "mainnet"
+                        ? live.config.valuechain.mainnet.explorerUrl
+                        : live.config.valuechain.testnet.explorerUrl
+                    }/address/${address}`}
                     target="_blank"
                     rel="noreferrer"
                     className="inline-flex items-center gap-1 text-sky-200/80 hover:text-sky-100"
                   >
-                    ValueChain explorer <ExternalLink className="h-3 w-3" />
+                    Your ValueChain address <ExternalLink className="h-3 w-3" />
                   </a>
                 )}
               </div>

@@ -54,6 +54,8 @@ Thumbs.db
 !PROTOCOL_TRACE*.md
 !ROOT_CAUSE_ANALYSIS.md
 !SYSTEM_AUDIT.md
+!EXECUTION_TRACE.md
+!FINAL_SYSTEM_AUDIT.md
 
 # Agent / local tracking (also covered by *.md)
 MEMORY.md

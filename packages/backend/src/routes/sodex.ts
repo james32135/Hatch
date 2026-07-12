@@ -111,6 +111,20 @@ export async function registerSodexRoutes(app: FastifyInstance): Promise<void> {
     return { profile: profile.id, data };
   });
 
+  /** Live liquidity scan + suitability scores (official books only). */
+  app.get("/api/sodex/markets/executable", async (req) => {
+    const profile = profileFromRequest(req);
+    const { scanExecutableMarkets } = await import("../services/marketLiquidity.js");
+    const markets = await scanExecutableMarkets(profile);
+    return {
+      profile: profile.id,
+      scannedAt: new Date().toISOString(),
+      scanned: markets.length,
+      executable: markets.filter((m) => m.executable).length,
+      markets,
+    };
+  });
+
   /**
    * UNSIGNED cancel draft — parent signs typedData then DELETE via /api/sodex/relay.
    */

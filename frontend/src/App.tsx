@@ -19,6 +19,7 @@ import ChildShell from "@/components/layout/ChildShell";
 import Onboarding from "@/pages/app/Onboarding";
 import Dashboard from "@/pages/app/Dashboard";
 import ChildrenList from "@/pages/app/ChildrenList";
+import Agent from "@/pages/app/Agent";
 import ChildDetail from "@/pages/app/ChildDetail";
 import ChildPortfolio from "@/pages/app/ChildPortfolio";
 import ChildAllowance from "@/pages/app/ChildAllowance";
@@ -78,6 +79,7 @@ const App = () => (
               <Route path="valuechain" element={<ValueChain />} />
               <Route path="transparency" element={<Transparency />} />
               <Route path="activity" element={<Activity />} />
+              <Route path="agent" element={<Agent />} />
               <Route path="notifications" element={<Notifications />} />
               <Route path="settings" element={<Settings />} />
             </Route>

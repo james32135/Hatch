@@ -22,7 +22,9 @@ export default function ChildAllowance() {
   const live = useInfraLive();
   const { signTypedDataAsync } = useSignTypedData();
   const { address } = useAccount();
+  const [lastRoute, setLastRoute] = useState<any>(null);
   const [signing, setSigning] = useState(false);
+
   const [lastOrderId, setLastOrderId] = useState<string | null>(null);
   const [phase, setPhase] = useState<string | null>(null);
 
@@ -50,11 +52,17 @@ export default function ChildAllowance() {
     refetchInterval: (q) => {
       const v = q.state.data?.verification;
       if (!v) return 2_000;
-      if (v.waitingForMatch || v.hatchStatus === "SUBMITTED" || v.executionStatus === "WAITING_FOR_MATCH") {
+      const sodex = String(v.sodexStatus || "").toUpperCase();
+      const hatch = String(v.hatchStatus || "").toUpperCase();
+      if (["FILLED", "CANCELED", "CANCELLED", "EXPIRED", "REJECTED", "FAILED"].includes(sodex)) {
+        return false;
+      }
+      if (["FILLED", "REJECTED", "FAILED"].includes(hatch) && !v.waitingForMatch) {
+        return false;
+      }
+      if (v.waitingForMatch || hatch === "SUBMITTED" || v.executionStatus === "WAITING_FOR_MATCH") {
         return 2_000;
       }
-      if (v.hatchStatus === "FILLED" || v.sodexStatus === "FILLED") return false;
-      if (["REJECTED", "FAILED"].includes(String(v.hatchStatus))) return false;
       return 4_000;
     },
   });
@@ -119,9 +127,10 @@ export default function ChildAllowance() {
 
   const signAndRelay = useMutation({
     mutationFn: async () => {
-      setPhase("Preparing");
+      setPhase("Scanning markets");
       const res = await api.post<any>("/api/allowances/sign-draft", { policyId: policy?.id });
       const draft = res.draft ?? res;
+      setLastRoute(res.route || draft.route || null);
       const td = draft.typedData;
       if (!td?.domain || !td?.types || !td?.message) {
         throw new Error("Investment request wasn't ready. Please try again.");
@@ -156,7 +165,7 @@ export default function ChildAllowance() {
       if (st === "FILLED" || ver?.sodexStatus === "FILLED") {
         toast.success("Order filled on SoDEX");
       } else if (st === "SUBMITTED" || data?.relayAccepted) {
-        toast.message("Relay accepted — waiting for SoDEX fill confirmation");
+        toast.message("Relay accepted — polling SoDEX order history until terminal");
       } else {
         toast.error(data?.note || "Order was not accepted by SoDEX");
       }
@@ -169,6 +178,9 @@ export default function ChildAllowance() {
         notional_cap: "That amount is above your safety limit.",
         notional_too_small:
           e?.message || "SoDEX minNotional is $5 for MAG7/USSI. Raise the weekly allowance.",
+        no_executable_liquidity:
+          e?.message ||
+          "No SoDEX market has enough ask liquidity right now. HATCH will not submit into an empty book.",
         kill_switch: "Investing is temporarily paused. Try again shortly.",
         sig_verify_failed: "Wallet signature didn't match. Please try again.",
       };
@@ -187,12 +199,15 @@ export default function ChildAllowance() {
   }
 
   const notReady = readiness.data && readiness.data.nextStep !== "READY";
+  const canceled =
+    ["CANCELED", "CANCELLED", "EXPIRED", "REJECTED"].includes(String(v?.sodexStatus || "").toUpperCase()) ||
+    ["REJECTED", "FAILED"].includes(String(v?.hatchStatus || "").toUpperCase());
   const statusLabel = filled
     ? "Filled"
-    : v?.waitingForMatch
-      ? "Waiting for matching"
-      : v?.hatchStatus === "REJECTED" || v?.hatchStatus === "FAILED"
-        ? String(v.hatchStatus)
+    : canceled
+      ? String(v?.sodexStatus || v?.hatchStatus || "Not filled")
+      : v?.waitingForMatch
+        ? "Waiting for matching"
         : lastOrderId
           ? String(v?.executionStatus || v?.hatchStatus || "Submitted")
           : null;
@@ -205,18 +220,35 @@ export default function ChildAllowance() {
         subtitle="Every step comes from SoDEX order history, trades, and balances — never assumed."
       />
 
+      {lastRoute && (
+        <SectionCard title="Execution route" subtitle="Liquidity-aware selection from live SoDEX books">
+          <div className="space-y-2.5 text-sm">
+            <Row k="Market" v={String(lastRoute.symbol)} />
+            <Row k="Best ask" v={lastRoute.bestAsk != null ? String(lastRoute.bestAsk) : "-"} />
+            <Row k="Ask depth (USD)" v={lastRoute.askDepthUsd != null ? fmtUsd(lastRoute.askDepthUsd) : "-"} />
+            <Row k="Score" v={String(lastRoute.score ?? "-")} />
+            <Row k="Slippage cap" v={`${(lastRoute.maxSlippageBps ?? 50) / 100}%`} />
+            <p className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3 text-xs leading-relaxed text-white/55">
+              {lastRoute.why}
+            </p>
+          </div>
+        </SectionCard>
+      )}
+
       {lastOrderId && (
         <ExplorerLinkCard
           title="SoDEX order"
           status={statusLabel || "Pending"}
-          statusTone={filled ? "ok" : v?.hatchStatus === "REJECTED" ? "danger" : "warn"}
+          statusTone={filled ? "ok" : canceled ? "danger" : "warn"}
           hash={v?.sodexOrderId || lastOrderId}
           explorerUrl={live.explorer?.log}
           networkLabel={`${live.network} · SoDEX + ValueChain`}
           detail={
             filled
               ? "SoDEX confirmed FILLED. Portfolio refresh uses live balances and trades."
-              : v?.waitingForMatch
+              : canceled
+                ? `Terminal SoDEX status ${v?.sodexStatus || v?.hatchStatus}. No fill credited unless executedQty > 0.`
+                : v?.waitingForMatch
                 ? "Relay accepted. Waiting for matching — UI will not show Filled until SoDEX order history confirms it."
                 : v?.mismatches?.length
                   ? v.mismatches.join(" · ")
@@ -326,9 +358,10 @@ export default function ChildAllowance() {
             </div>
           ) : (
             <ol className="space-y-2 text-sm text-white/70">
-              <li>1. We prepare this week's investment from live SoDEX symbols and mids.</li>
-              <li>2. You approve it in your wallet (no network fee for this step).</li>
-              <li>3. SoDEX accepts the order, then we poll order history until FILLED.</li>
+              <li>1. Scan live SoDEX books and score executable markets (skip empty asks).</li>
+              <li>2. Route to the best liquid instrument for this week's plan.</li>
+              <li>3. You approve in your wallet (no network fee for this step).</li>
+              <li>4. Poll SoDEX history until FILLED, CANCELED, EXPIRED, or REJECTED.</li>
             </ol>
           )}
           {phase && <p className="mt-2 text-xs text-sky-200/80">{phase}…</p>}
@@ -339,15 +372,17 @@ export default function ChildAllowance() {
               signing ||
               notReady ||
               Number(policy.amountUsd) < 5 ||
-              (lastOrderId && v?.waitingForMatch)
+              (!!lastOrderId && !!v?.waitingForMatch && !canceled && !filled)
             }
             onClick={() => signAndRelay.mutate()}
           >
             {signAndRelay.isPending || signing
               ? "Waiting for your approval…"
-              : v?.waitingForMatch
+              : v?.waitingForMatch && !canceled && !filled
                 ? "Waiting for SoDEX fill…"
-                : "Approve investment"}
+                : filled
+                  ? "Invest again"
+                  : "Approve investment"}
           </Button>
 
           <div className="mt-4">

@@ -10,6 +10,7 @@ import {
   Home,
   BookOpen,
   Eye,
+  Sparkles,
 } from "lucide-react";
 import HatchLogo from "@/components/common/HatchLogo";
 import { StatusPip } from "@/components/common/StatusPip";
@@ -90,6 +91,9 @@ export default function AppShell() {
             </NavLink>
             <NavLink to="/app/activity" className={linkCls}>
               <ActivityIcon className="h-4 w-4" strokeWidth={1.5} /> Activity
+            </NavLink>
+            <NavLink to="/app/agent" className={linkCls}>
+              <Sparkles className="h-4 w-4" strokeWidth={1.5} /> Agent
             </NavLink>
 
             <div className="mt-6 px-3 text-[10px] font-medium uppercase tracking-[0.18em] text-white/30">More</div>

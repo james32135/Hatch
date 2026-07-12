@@ -85,4 +85,46 @@ export async function registerAiRoutes(app: FastifyInstance): Promise<void> {
       };
     },
   );
+
+  /** Investment Copilot — grounded in live SoDEX + portfolio. */
+  app.get(
+    "/api/ai/agent/prompts",
+    { preHandler: [app.authenticate] },
+    async () => {
+      const { agentQuickPrompts } = await import("../services/investmentAgent.js");
+      return { prompts: agentQuickPrompts() };
+    },
+  );
+
+  app.post(
+    "/api/ai/agent",
+    { preHandler: [app.authenticate] },
+    async (req) => {
+      requireParent(req);
+      const body = req.body as {
+        messages?: Array<{ role: "user" | "assistant"; content: string }>;
+        childId?: string;
+      };
+      if (!body.messages?.length) {
+        throw new HatchError("invalid_body", "messages required", 400);
+      }
+      if (body.childId) {
+        await assertChildAccess(req, body.childId);
+      }
+      const { resolveProfile } = await import("../config/environment.js");
+      const { getEnv } = await import("../config/env.js");
+      const profile = resolveProfile(
+        (req.headers["x-hatch-profile"] as string | undefined) ??
+          getEnv().HATCH_DEFAULT_PROFILE,
+      );
+      const { runInvestmentAgent } = await import("../services/investmentAgent.js");
+      return runInvestmentAgent({
+        profile,
+        parentId: req.user.sub,
+        childId: body.childId,
+        wallet: req.user.wallet,
+        messages: body.messages,
+      });
+    },
+  );
 }

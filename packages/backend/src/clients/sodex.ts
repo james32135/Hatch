@@ -116,6 +116,12 @@ export class SodexClient {
     return this.getPublic("/markets/symbols", 60);
   }
 
+  /** Official: GET /markets/{symbol}/orderbook */
+  async orderbook(symbol: string, limit = 20): Promise<unknown> {
+    const sym = encodeURIComponent(symbol);
+    return this.getPublic(`/markets/${sym}/orderbook?limit=${limit}`, 3);
+  }
+
   async ticker(symbolId: number): Promise<unknown> {
     return this.getPublic(`/markets/ticker?symbolId=${symbolId}`, 5);
   }
@@ -138,6 +144,7 @@ export class SodexClient {
       "content-type": "application/json",
       "X-API-Sign": headers.apiSign,
       "X-API-Nonce": headers.apiNonce,
+      "X-API-Chain": String(this.profile.chainId),
     };
     if (headers.apiKeyName) {
       h["X-API-Key"] = headers.apiKeyName;

@@ -11,11 +11,11 @@ import {
   auditPolicyChange,
   type AllowanceSignHandoff,
 } from "../services/allowanceHandoff.js";
-import { draftAllowanceParentSign } from "../services/parentSignDraft.js";
+import { draftRoutedParentSign } from "../services/parentSignDraft.js";
 import {
-  resolveHatchIndexSymbols,
-  resolveMidsFromTickers,
-} from "../services/sodexSymbols.js";
+  scanExecutableMarkets,
+  selectExecutionRoute,
+} from "../services/marketLiquidity.js";
 import { resolveParentSodexAccountId } from "../services/parentAccountId.js";
 
 const policySchema = z.object({
@@ -142,44 +142,69 @@ export async function registerAllowanceRoutes(app: FastifyInstance): Promise<voi
         refreshIfMissing: parsed.data.refreshAccountId ?? true,
       });
 
-      const symbols = await resolveHatchIndexSymbols(profile);
-      const liveMids = await resolveMidsFromTickers(profile, [
-        symbols.mag7.name,
-        symbols.ussi.name,
-      ]);
-      const mids = {
-        mag7: parsed.data.mids?.mag7 ?? liveMids[symbols.mag7.name],
-        ussi: parsed.data.mids?.ussi ?? liveMids[symbols.ussi.name],
-      };
-      if (!mids.mag7 && !mids.ussi) {
+      const policyRow = await getPrisma().allowancePolicy.findFirst({
+        where: { id: handoff.policyId, parentId: req.user.sub },
+      });
+      const maxSlippageBps = policyRow?.maxSlippageBps ?? 50;
+      const notionalUsd = Number(handoff.amountUsd);
+
+      let markets;
+      try {
+        markets = await scanExecutableMarkets(profile);
+      } catch (e) {
         throw new HatchError(
           "unavailable",
-          "No live SoDEX mids for MAG7/USSI — cannot size a fillable order without inventing prices",
+          `SoDEX market scan failed: ${String(e).slice(0, 200)}`,
           502,
         );
       }
 
-      const draft = draftAllowanceParentSign({
+      let route;
+      try {
+        route = selectExecutionRoute({
+          riskTier: handoff.riskTier,
+          notionalUsd,
+          maxSlippageBps,
+          markets,
+        });
+      } catch (e: any) {
+        throw new HatchError(
+          e?.code === "no_executable_liquidity" || e?.code === "notional_too_small"
+            ? e.code
+            : "unavailable",
+          e?.message || "No executable SoDEX market",
+          e?.code === "notional_too_small" ? 400 : 503,
+          e?.details,
+        );
+      }
+
+      const draft = draftRoutedParentSign({
         handoff,
         accountID: resolved.accountID,
         network,
         nonce: parsed.data.nonce,
-        symbols: { mag7: symbols.mag7, ussi: symbols.ussi },
-        mids,
+        route,
       });
 
       return {
         draft,
         accountID: resolved.accountID,
         accountIdSource: resolved.source,
-        symbols: {
-          mag7: symbols.mag7,
-          ussi: symbols.ussi,
-          network: symbols.network,
+        route: draft.route,
+        marketScan: {
+          scanned: markets.length,
+          executable: markets.filter((m) => m.executable).length,
+          top: markets.slice(0, 8).map((m) => ({
+            symbol: m.symbol,
+            score: m.score,
+            executable: m.executable,
+            bestAsk: m.bestAsk,
+            askDepthUsd: m.askDepthUsd,
+            rejectReasons: m.rejectReasons,
+          })),
         },
-        mids,
         sizingNote: draft.sizingNote,
-        note: "UNSIGNED. Sign typedData in parent wallet, set apiSign on draft.relayRequest, then POST /api/sodex/relay.",
+        note: "UNSIGNED. Liquidity-aware route chosen from live SoDEX books. Sign typedData, then POST /api/sodex/relay.",
       };
     },
   );

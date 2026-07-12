@@ -32,6 +32,7 @@ import {
   getStepSize,
   type SpotSymbolMeta,
 } from "./sodexSymbols.js";
+import type { ExecutionRoute } from "./marketLiquidity.js";
 
 export interface ParentSignDraft {
   kind: "parent_sign_draft";
@@ -90,6 +91,19 @@ export interface ParentSignDraft {
   };
   sizingNote: string;
   note: string;
+  /** Liquidity-aware route decision (official books). */
+  route?: {
+    why: string;
+    symbol: string;
+    marketId: number;
+    bestAsk: number | null;
+    askDepthUsd: number;
+    score: number;
+    maxSlippageBps: number;
+    referenceAsk: number;
+    scannedAt: string;
+    considered: ExecutionRoute["considered"];
+  };
 }
 
 function clOrdId(prefix: string): string {
@@ -309,6 +323,123 @@ export function draftAllowanceParentSign(input: {
     },
     sizingNote,
     note: "UNSIGNED draft only. Parent wallet signs typedData (BigInt nonce); backend never custodies keys. Fill verified via SoDEX order history + trades after relay.",
+  };
+}
+
+/**
+ * Liquidity-aware single-leg draft from selectExecutionRoute().
+ * Prefer Path A indices when they have asks; otherwise highest-score executable market.
+ */
+export function draftRoutedParentSign(input: {
+  handoff: AllowanceSignHandoff;
+  accountID: number;
+  network: "mainnet" | "testnet";
+  nonce?: bigint | number | string;
+  route: ExecutionRoute;
+}): ParentSignDraft {
+  if (!Number.isFinite(input.accountID) || input.accountID <= 0) {
+    throw new Error("accountID required for parent sign draft");
+  }
+  const chainId =
+    input.network === "mainnet" ? SODEX.mainnet.chainId : SODEX.testnet.chainId;
+  const nonce =
+    typeof input.nonce === "bigint"
+      ? input.nonce
+      : BigInt(input.nonce ?? Date.now());
+
+  const { route } = input;
+  const clOrdID = clOrdId("hx");
+  const orderRows = [
+    {
+      symbolID: route.market.marketId,
+      clOrdID,
+      side: 1 as SpotOrderSide,
+      type: 1 as SpotOrderType,
+      timeInForce: 3 as SpotTimeInForce,
+      price: route.limitPrice,
+      quantity: route.quantity,
+    },
+  ];
+  const legs: ParentSignDraft["legs"] = [
+    {
+      symbol: route.market.symbol,
+      symbolID: route.market.marketId,
+      notionalUsd: route.notionalUsd,
+      side: 1,
+      type: 1,
+      price: route.limitPrice,
+      quantity: route.quantity,
+    },
+  ];
+  const params = buildBatchNewOrdersParams({
+    accountID: input.accountID,
+    orders: orderRows,
+  });
+  const payloadHash = payloadHashFromAction(SPOT_ACTION_BATCH_NEW, params);
+  const domain = sodexDomain("spot", chainId);
+  const primary = orderRows[0]!;
+
+  return {
+    kind: "parent_sign_draft",
+    status: "UNSIGNED",
+    network: input.network,
+    chainId,
+    scope: "spot",
+    path: SPOT_TRADE_BATCH_PATH,
+    method: "POST",
+    actionType: SPOT_ACTION_BATCH_NEW,
+    params,
+    payloadHash,
+    nonce: nonce.toString(),
+    typedData: {
+      domain,
+      types: SODEX_EXCHANGE_TYPES,
+      primaryType: "ExchangeAction",
+      message: { payloadHash, nonce: nonce.toString() },
+    },
+    relayHints: {
+      method: "POST",
+      path: SPOT_TRADE_BATCH_PATH,
+      needApiSignPrefix: "0x01",
+    },
+    relayRequest: {
+      method: "POST",
+      path: SPOT_TRADE_BATCH_PATH,
+      scope: "spot",
+      body: params,
+      payloadHash,
+      apiNonce: nonce.toString(),
+      apiSign: null,
+      childId: input.handoff.childId,
+      clOrdId: primary.clOrdID,
+      symbolId: primary.symbolID,
+      symbolName: route.market.symbol,
+      side: "BUY",
+      quantity: primary.quantity,
+      price: primary.price,
+    },
+    legs,
+    handoffRef: {
+      policyId: input.handoff.policyId,
+      childId: input.handoff.childId,
+      parentId: input.handoff.parentId,
+      amountUsd: input.handoff.amountUsd,
+      riskTier: input.handoff.riskTier,
+    },
+    sizingNote: `Liquidity route → ${route.market.symbol} @ limit ${route.limitPrice} (ask ${route.referenceAsk}, slip ${route.maxSlippageBps}bps). ${route.why}`,
+    note: "UNSIGNED draft. Liquidity-aware: never submits into empty ask books. Parent signs; fills verified via SoDEX history + trades.",
+    route: {
+      why: route.why,
+      symbol: route.market.symbol,
+      marketId: route.market.marketId,
+      bestAsk: route.market.bestAsk,
+      askDepthUsd: route.market.askDepthUsd,
+      score: route.market.score,
+      maxSlippageBps: route.maxSlippageBps,
+      referenceAsk: route.referenceAsk,
+      scannedAt: route.scannedAt,
+      considered: route.considered,
+    },
   };
 }
 

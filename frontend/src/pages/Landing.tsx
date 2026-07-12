@@ -128,7 +128,7 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* Product preview mock */}
+      {/* Product preview */}
       <section className="border-t border-white/5">
         <div className="mx-auto max-w-6xl px-6 py-24">
           <SectionEyebrow>Parent dashboard</SectionEyebrow>
@@ -322,7 +322,7 @@ function DashboardMock() {
       transition={{ duration: 0.7 }}
       className="overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-b from-white/[0.03] to-transparent"
     >
-      {/* mock chrome */}
+      {/* App chrome */}
       <div className="flex items-center gap-1.5 border-b border-white/10 bg-white/[0.02] px-4 py-2.5">
         <span className="h-2.5 w-2.5 rounded-full bg-white/20" />
         <span className="h-2.5 w-2.5 rounded-full bg-white/20" />

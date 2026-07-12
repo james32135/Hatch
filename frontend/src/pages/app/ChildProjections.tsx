@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { api } from "@/lib/api";
@@ -18,17 +19,29 @@ export default function ChildProjections() {
     queryFn: () => api.get<any>("/api/allowances"),
   });
   const policy = (allowances.data?.policies || []).find((p: any) => p.childId === childId);
-  const weekly = Number(policy?.amountUsd ?? 20);
+  const weekly = policy?.amountUsd != null ? Number(policy.amountUsd) : null;
 
   const scenarios = useMutation({
-    mutationFn: () =>
-      api.post<any>("/api/projections/scenarios", {
+    mutationFn: () => {
+      if (weekly == null || !(weekly > 0)) {
+        return Promise.reject(new Error("Set a weekly allowance first"));
+      }
+      return api.post<any>("/api/projections/scenarios", {
         childId,
         years: 10,
         weeklyAllowanceUsd: weekly,
         monthlyAllowanceUsd: weekly * 4,
-      }),
+      });
+    },
   });
+
+  // Auto-load educational scenarios when a real weekly policy exists
+  useEffect(() => {
+    if (weekly != null && weekly > 0 && !scenarios.data && !scenarios.isPending && !scenarios.isError) {
+      scenarios.mutate();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weekly, childId]);
 
   const weeklyPack = scenarios.data?.weekly || {};
   const bandKeys = Object.keys(weeklyPack);
@@ -65,7 +78,7 @@ export default function ChildProjections() {
   const milestones = [
     {
       label: "Week 1",
-      body: `Their first ${fmtUsd(weekly)} lands. The habit begins.`,
+      body: `Their first ${weekly != null ? fmtUsd(weekly) : "allowance"} lands. The habit begins.`,
       value: weekly,
     },
     {
@@ -89,7 +102,11 @@ export default function ChildProjections() {
     <div className="space-y-4">
       <SectionCard
         title="What consistency can look like"
-        subtitle={`If you keep investing about ${fmtUsd(weekly)} every week…`}
+        subtitle={
+          weekly != null && weekly > 0
+            ? `If you keep investing about ${fmtUsd(weekly)} every week…`
+            : "Set a weekly allowance to see teaching scenarios."
+        }
       >
         <p className="text-sm leading-relaxed text-white/60">
           These are teaching scenarios based on documented assumption bands: not promises, not live yields, and not
@@ -109,13 +126,13 @@ export default function ChildProjections() {
 
       <SectionCard
         title="10-year story"
-        subtitle={`Weekly input: ${fmtUsd(weekly)}`}
+        subtitle={weekly != null && weekly > 0 ? `Weekly input: ${fmtUsd(weekly)}` : "Needs a weekly allowance"}
         action={
           <Button
             className="bg-white text-black hover:bg-white/90"
             size="sm"
             onClick={() => scenarios.mutate()}
-            disabled={scenarios.isPending}
+            disabled={scenarios.isPending || weekly == null || !(weekly > 0)}
           >
             {scenarios.isPending ? "Calculating…" : chart.length ? "Refresh" : "Show story"}
           </Button>

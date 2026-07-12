@@ -26,7 +26,10 @@ export function getRole(): "parent" | "child" | null {
 }
 export function getProfile(): HatchProfile {
   const p = localStorage.getItem(PROFILE_KEY) as HatchProfile | null;
-  return p || ((import.meta.env.VITE_DEFAULT_PROFILE as HatchProfile) || "mainnet");
+  return (
+    p ||
+    ((import.meta.env.VITE_DEFAULT_PROFILE as HatchProfile) || "testnet")
+  );
 }
 export function setProfile(p: HatchProfile) {
   localStorage.setItem(PROFILE_KEY, p);

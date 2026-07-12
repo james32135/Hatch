@@ -17,6 +17,7 @@ import { getPrisma } from "../src/lib/prisma.js";
 import { normalizeEcdsaV } from "../src/services/engSodexSigner.js";
 import { SODEX_EXCHANGE_TYPES } from "../src/services/sodexSign.js";
 import { assertRelayBodyMatchesPayloadHash } from "../src/services/parentSignDraft.js";
+import { reloadCapabilitiesFromProbe } from "../src/services/marketCapability.js";
 
 function loadRootEnv(): void {
   for (const p of [
@@ -44,6 +45,7 @@ describe("auth → sign-draft → relay (parent-signed)", () => {
     resetEnvCache();
     getEnv();
     getPrisma();
+    await reloadCapabilitiesFromProbe("testnet");
     app = await buildApp();
     await app.ready();
   });
@@ -138,9 +140,9 @@ describe("auth → sign-draft → relay (parent-signed)", () => {
         authorization: `Bearer ${token}`,
         "x-hatch-profile": "testnet",
       },
-      payload: { policyId, network: "testnet" },
+      payload: { policyId, network: "testnet", symbol: "WSOSO_vUSDC" },
     });
-    expect(draftRes.statusCode).toBe(200);
+    expect(draftRes.statusCode, JSON.stringify(draftRes.json())).toBe(200);
     const { draft, accountID } = draftRes.json() as {
       draft: {
         status: string;
@@ -192,10 +194,11 @@ describe("auth → sign-draft → relay (parent-signed)", () => {
       payload: {
         policyId,
         network: "testnet",
+        symbol: "WSOSO_vUSDC",
         mids: { mag7: "1.00", ussi: "1.00" },
       },
     });
-    expect(draftRes.statusCode).toBe(200);
+    expect(draftRes.statusCode, JSON.stringify(draftRes.json())).toBe(200);
     const { draft } = draftRes.json() as {
       draft: {
         typedData: {

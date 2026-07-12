@@ -74,7 +74,8 @@ export function extractBalances(state: unknown): Record<string, number> {
             o.symbol != null ||
             o.asset != null ||
             o.token != null ||
-            o.coinName != null
+            o.coinName != null ||
+            o.a != null
           ) {
             ingestRow(out, item);
           } else {
@@ -220,6 +221,7 @@ export function resolvePriceUsd(
 export async function projectPortfolioUsd(
   sodexAccountState: unknown,
   sodexBalances?: unknown,
+  profileId?: string | null,
 ): Promise<PortfolioProjection> {
   const warnings: string[] = [];
   let snapshot: unknown;
@@ -244,7 +246,9 @@ export async function projectPortfolioUsd(
     const { createSodexClient } = await import("../clients/sodex.js");
     const { resolveProfile } = await import("../config/environment.js");
     const { getEnv } = await import("../config/env.js");
-    const sodex = createSodexClient(resolveProfile(getEnv().HATCH_DEFAULT_PROFILE));
+    const sodex = createSodexClient(
+      resolveProfile(profileId ?? getEnv().HATCH_DEFAULT_PROFILE),
+    );
     const tickers = await sodex.marketsTickers();
     const list = Array.isArray((tickers as any)?.data)
       ? (tickers as any).data
@@ -258,6 +262,12 @@ export async function projectPortfolioUsd(
       const base = sym.split("_")[0];
       if (base && prices[base] === undefined) prices[base] = px;
       if (prices[sym] === undefined) prices[sym] = px;
+      // Alias common display forms (WSOSO ↔ SOSO)
+      if (/^w?soso$/i.test(base)) {
+        if (prices.SOSO === undefined) prices.SOSO = px;
+        if (prices.WSOSO === undefined) prices.WSOSO = px;
+        if (prices.soso === undefined) prices.soso = px;
+      }
     }
   } catch {
     /* SoDEX ticker supplement is best-effort */

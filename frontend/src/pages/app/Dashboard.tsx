@@ -121,7 +121,7 @@ export default function Dashboard() {
   const investedHint =
     totalUsd == null
       ? familyFresh.waitingSsi || familyPortfolio.data?.sodexError
-        ? "Waiting for SSI confirmation"
+        ? "Waiting for live prices"
         : "Waiting for first investment"
       : totalUsd === 0
         ? "Waiting for first investment"
@@ -230,7 +230,7 @@ export default function Dashboard() {
                 <div className="mt-5 text-3xl font-medium tracking-tight">{total == null ? "-" : fmtUsd(total)}</div>
                 <div className="mt-1 text-xs text-white/45">
                   {waiting
-                    ? "Waiting for SSI confirmation"
+                    ? "Waiting for live prices"
                     : total === 0
                       ? "Ready for their first investment"
                       : "Shared family account · live SoDEX"}

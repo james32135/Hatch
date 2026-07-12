@@ -55,7 +55,12 @@ export async function processOneJob(): Promise<boolean> {
 async function dispatch(job: JobPayload): Promise<void> {
   switch (job.name) {
     case "portfolio_sync":
-      await runPortfolioSync();
+      await runPortfolioSync({
+        profileId: job.data.profileId ? String(job.data.profileId) : undefined,
+        childId: job.data.childId ? String(job.data.childId) : undefined,
+        triggerDelta:
+          job.data.triggerDelta != null ? Number(job.data.triggerDelta) : undefined,
+      });
       break;
     case "market_sync":
       await runMarketSync();
@@ -66,7 +71,25 @@ async function dispatch(job: JobPayload): Promise<void> {
     case "lesson_generation": {
       const childId = String(job.data.childId ?? "");
       if (!childId) throw new Error("lesson_generation requires childId");
-      await generateLessonForChild({ childId });
+      const triggerDelta =
+        job.data.triggerDelta != null ? Number(job.data.triggerDelta) : undefined;
+      // Skip empty flat spam when no real portfolio movement was provided
+      if (
+        triggerDelta === undefined ||
+        !Number.isFinite(triggerDelta) ||
+        Math.abs(triggerDelta) < 0.01
+      ) {
+        logger.info(
+          { childId, triggerDelta },
+          "lesson_generation skipped — no material portfolio delta",
+        );
+        break;
+      }
+      await generateLessonForChild({
+        childId,
+        triggerDelta,
+        skipCache: true,
+      });
       break;
     }
     case "order_fill_verify": {
@@ -101,12 +124,19 @@ async function dispatch(job: JobPayload): Promise<void> {
   }
 }
 
-export async function runPortfolioSync(): Promise<{ children: number }> {
+export async function runPortfolioSync(opts?: {
+  profileId?: string;
+  childId?: string;
+  triggerDelta?: number;
+}): Promise<{ children: number }> {
   const prisma = getPrisma();
   const env = getEnv();
-  const profile = resolveProfile(env.HATCH_DEFAULT_PROFILE);
+  const profile = resolveProfile(opts?.profileId ?? env.HATCH_DEFAULT_PROFILE);
   const children = await prisma.child.findMany({
-    where: { paused: false },
+    where: {
+      paused: false,
+      ...(opts?.childId ? { id: opts.childId } : {}),
+    },
     include: { parent: true },
     take: 50,
   });
@@ -136,7 +166,7 @@ export async function runPortfolioSync(): Promise<{ children: number }> {
 
       let priced: Awaited<ReturnType<typeof priceAccountState>> | null = null;
       try {
-        priced = await priceAccountState(state, balances);
+        priced = await priceAccountState(state, balances, profile.id);
       } catch (err) {
         logger.warn(
           { childId: child.id, err: String(err) },
@@ -157,13 +187,23 @@ export async function runPortfolioSync(): Promise<{ children: number }> {
         },
       });
 
+      const prevUsd =
+        prev?.totalUsd != null ? Number(prev.totalUsd.toString()) : null;
+      const nextUsd = priced?.totalUsd ?? null;
+      const computedDelta =
+        opts?.triggerDelta ??
+        (prevUsd != null && nextUsd != null ? nextUsd - prevUsd : undefined);
+
       if (
         snapshotMateriallyChanged(prev, {
           totalUsd: priced?.totalUsd ?? null,
           rawBalancesJson: state,
         })
       ) {
-        await enqueueJob("lesson_generation", { childId: child.id });
+        await enqueueJob("lesson_generation", {
+          childId: child.id,
+          triggerDelta: computedDelta,
+        });
       }
       ok += 1;
     } catch (err) {

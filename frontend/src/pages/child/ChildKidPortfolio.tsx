@@ -37,7 +37,7 @@ export default function ChildKidPortfolio() {
   if (!p.isLoading && total == null && fresh.source === "unavailable") {
     return (
       <Unavailable
-        title="Waiting for SSI confirmation"
+        title="Waiting for live prices"
         detail="Your portfolio will appear from your parent's live SoDEX account after the first investment."
       />
     );
@@ -96,7 +96,7 @@ export default function ChildKidPortfolio() {
                 <div key={i} className="flex items-center justify-between border-b border-white/5 pb-2 last:border-none">
                   <span className="font-mono">{h.symbol || h.token}</span>
                   <span className="font-mono text-white/70">
-                    {unpriced ? "Waiting for SSI confirmation" : fmtUsd(usd)}
+                    {unpriced ? "Waiting for live prices" : fmtUsd(usd)}
                   </span>
                 </div>
               );

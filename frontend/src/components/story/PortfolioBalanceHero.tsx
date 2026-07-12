@@ -1,5 +1,6 @@
 import {
   portfolioFreshness,
+  portfolioWaitingCopy,
   resolveLivePortfolioUsd,
   resolveSnapshotPortfolioUsd,
 } from "@/lib/portfolio";
@@ -22,11 +23,11 @@ export function PortfolioBalanceHero({
   const live = resolveLivePortfolioUsd(portfolio);
   const snap = resolveSnapshotPortfolioUsd(portfolio);
   const fresh = portfolioFreshness(portfolio);
-  const waitingSsi =
-    fresh.waitingSsi ||
-    (portfolio?.sodexError && live == null) ||
+  const wait = portfolioWaitingCopy(portfolio);
+  const partialUnpriced =
+    fresh.waitingPricing ||
     (Array.isArray(portfolio?.warnings) &&
-      portfolio.warnings.some((w: string) => /ssi|confirm|index/i.test(String(w))));
+      portfolio.warnings.some((w: string) => /no live usd price/i.test(String(w))));
 
   if (live != null) {
     return (
@@ -48,8 +49,10 @@ export function PortfolioBalanceHero({
           {fresh.pricedAt && <span>Priced {fmtDate(fresh.pricedAt)}</span>}
           {fresh.sharedAccount && <span>· Shared family trading account</span>}
         </div>
-        {waitingSsi && (
-          <p className="mt-2 text-xs text-amber-200/80">Waiting for SSI confirmation on some holdings.</p>
+        {partialUnpriced && (
+          <p className="mt-2 text-xs text-amber-200/80">
+            Some holdings are not priced yet — totals exclude unpriced assets.
+          </p>
         )}
       </div>
     );
@@ -63,23 +66,10 @@ export function PortfolioBalanceHero({
         {fresh.snapshotAt && (
           <p className="mt-0.5 text-xs text-white/40">Snapshot {fmtDate(fresh.snapshotAt)}</p>
         )}
-        <p className="mt-2 text-xs text-white/50">
-          {waitingSsi || portfolio?.sodexError
-            ? "Waiting for SSI confirmation"
-            : "Could not refresh live SoDEX balances right now."}
-        </p>
+        <p className="mt-2 text-xs text-white/50">{wait.detail}</p>
       </div>
     );
   }
 
-  return (
-    <Unavailable
-      title="Waiting for SSI confirmation"
-      detail={
-        portfolio?.sodexError
-          ? "Live SoDEX balances are unavailable. We will not invent a number."
-          : "Nothing priced yet. After the first filled order, live balances appear here."
-      }
-    />
-  );
+  return <Unavailable title={wait.title} detail={wait.detail} />;
 }

@@ -55,6 +55,7 @@ export async function registerPortfolioRoutes(app: FastifyInstance): Promise<voi
           parentWallet: parent.walletAddress,
           accountState,
           accountBalances,
+          profileId: profile.id,
         });
       } catch (err) {
         sodexError = [
@@ -84,6 +85,16 @@ export async function registerPortfolioRoutes(app: FastifyInstance): Promise<voi
         sodexError: sodexError ?? null,
         sharedAccount: true,
         note: "Parent SoDEX account is shared across children. Child view is read-only.",
+        waitingReason:
+          liveTotalUsd != null
+            ? null
+            : sodexError
+              ? "sodex_read_failed"
+              : engine?.projection?.warnings?.length
+                ? "holdings_unpriced"
+                : snapshotTotalUsd != null
+                  ? "snapshot_only"
+                  : "no_balances",
       };
 
       return {

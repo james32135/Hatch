@@ -18,12 +18,21 @@ export default function ChildHome() {
     enabled: !!childId,
     refetchInterval: 20_000,
   });
+  const allowances = useQuery({
+    queryKey: ["allowances-child-view", childId],
+    queryFn: () => api.get<any>("/api/allowances"),
+    enabled: !!childId,
+    refetchInterval: 60_000,
+  });
 
   const total = resolveLivePortfolioUsd(p.data);
   const fresh = portfolioFreshness(p.data);
   const pnlPct = p.data?.performance?.pnlPct;
   const holdings = (p.data?.holdings || []).slice(0, 4);
   const name = me.data?.displayName || me.data?.child?.displayName || "friend";
+  const policy = (allowances.data?.policies || []).find((x: any) => x.childId === childId);
+  const nextDue = policy?.nextDueAt ? new Date(policy.nextDueAt) : null;
+  const weeklyAmt = policy?.amountUsd != null ? Number(policy.amountUsd) : null;
 
   return (
     <div className="space-y-8">
@@ -83,7 +92,7 @@ export default function ChildHome() {
                   <div>
                     <div className="text-sm font-medium">{friendlyMarket(h.symbol || h.token)}</div>
                     <div className="text-xs text-white/45">
-                      {unpriced ? "Waiting for SSI confirmation" : fmtUsd(usd)}
+                      {unpriced ? "Waiting for live prices" : fmtUsd(usd)}
                     </div>
                   </div>
                 </motion.div>
@@ -95,9 +104,15 @@ export default function ChildHome() {
 
       <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-6">
         <div className="text-sm text-white/60">Next allowance</div>
-        <div className="mt-1 text-2xl">Coming from your parent</div>
+        <div className="mt-1 text-2xl">
+          {weeklyAmt != null && weeklyAmt > 0 ? fmtUsd(weeklyAmt) : "Coming from your parent"}
+        </div>
         <p className="mt-2 text-xs text-white/45">
-          Your parent adds a little each week. You get to watch it grow. You cannot change the schedule from here.
+          {policy?.paused
+            ? "Allowance is paused right now."
+            : nextDue && !Number.isNaN(nextDue.getTime())
+              ? `Next planned date: ${nextDue.toLocaleDateString()}. You can watch — you cannot change the schedule.`
+              : "Your parent adds a little each week. You get to watch it grow. You cannot change the schedule from here."}
         </p>
       </div>
 

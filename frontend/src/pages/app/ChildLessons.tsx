@@ -25,7 +25,23 @@ export default function ChildLessons() {
     enabled: !!childId,
   });
   const gen = useMutation({
-    mutationFn: () => api.post<any>(`/api/lessons/${childId}/generate`, { kind: "portfolio_delta" }),
+    mutationFn: () => {
+      const live = resolveLivePortfolioUsd(portfolio.data);
+      const snap = Number(portfolio.data?.snapshotTotalUsd ?? portfolio.data?.latestSnapshot?.totalUsd);
+      const delta =
+        live != null && Number.isFinite(snap)
+          ? live - snap
+          : live != null
+            ? live
+            : undefined;
+      if (delta === undefined || !Number.isFinite(delta) || Math.abs(delta) < 0.01) {
+        return Promise.reject(new Error("No portfolio change to write about yet"));
+      }
+      return api.post<any>(`/api/lessons/${childId}/generate`, {
+        kind: "portfolio_delta",
+        triggerDelta: delta,
+      });
+    },
     onSuccess: () => {
       toast.success("Writing a new lesson…");
       qc.invalidateQueries({ queryKey: ["lessons", childId] });

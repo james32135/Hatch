@@ -105,8 +105,8 @@ export default function ChildPortfolio() {
             detail={
               totalUsd === 0
                 ? "Invest from Allowance to build their first allocation."
-                : fresh.waitingSsi
-                  ? "Waiting for SSI confirmation"
+                : fresh.waitingPricing || fresh.waitingSsi
+                  ? "Waiting for live prices"
                   : "Waiting for priced holdings."
             }
           />
@@ -142,8 +142,8 @@ export default function ChildPortfolio() {
         {holdings.length === 0 ? (
           <Unavailable
             detail={
-              fresh.waitingSsi || sodexError
-                ? "Waiting for SSI confirmation"
+              fresh.waitingPricing || fresh.waitingSsi || sodexError
+                ? "Waiting for live prices"
                 : "Nothing invested yet."
             }
           />
@@ -172,7 +172,7 @@ export default function ChildPortfolio() {
                   </div>
                   <div className="text-right font-mono text-sm">
                     {unpriced ? (
-                      <span className="text-xs text-amber-200/80">Waiting for SSI confirmation</span>
+                      <span className="text-xs text-amber-200/80">Waiting for live prices</span>
                     ) : (
                       fmtUsd(usd)
                     )}

@@ -28,7 +28,7 @@ export default function ChildrenList() {
           {fresh.live
             ? "Shared family trading account · live SoDEX"
             : fresh.waitingSsi || family.data?.sodexError
-              ? "Waiting for SSI confirmation"
+              ? "Waiting for live prices"
               : "Waiting for live balances"}
         </p>
       )}

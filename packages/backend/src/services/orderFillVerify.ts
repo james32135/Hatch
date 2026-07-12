@@ -431,9 +431,18 @@ export async function verifySignedOrderAgainstSodex(input: {
         trigger: "order_filled",
         childId: row.childId,
         signedOrderId: row.id,
+        profileId: input.profile.id,
+        triggerDelta: Number(filledValue ?? 0) || undefined,
       });
       if (row.childId) {
-        await enqueueJob("lesson_generation", { childId: row.childId });
+        const delta = Number(filledValue ?? 0);
+        if (Number.isFinite(delta) && Math.abs(delta) >= 0.01) {
+          await enqueueJob("lesson_generation", {
+            childId: row.childId,
+            triggerDelta: delta,
+            asset: row.symbolName ?? "portfolio",
+          });
+        }
       }
     }
   }

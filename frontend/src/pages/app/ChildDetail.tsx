@@ -73,13 +73,19 @@ export default function ChildDetail() {
               {(() => {
                 const live = resolveLivePortfolioUsd(portfolio.data);
                 const fresh = portfolioFreshness(portfolio.data);
+                const snap = portfolio.data?.snapshotTotalUsd ?? portfolio.data?.latestSnapshot?.totalUsd;
                 if (live != null) return fmtUsd(live);
-                if (fresh.waitingSsi || portfolio.data?.sodexError) return "Waiting…";
+                if (snap != null && Number.isFinite(Number(snap))) return fmtUsd(Number(snap));
+                if (portfolio.data?.sodexError || fresh.waitingPricing) return "Waiting…";
                 return "-";
               })()}
             </div>
             <div className="text-[10px] text-white/35">
-              {portfolioFreshness(portfolio.data).live ? "Live SoDEX" : "Not live"}
+              {portfolioFreshness(portfolio.data).live
+                ? "Live SoDEX"
+                : portfolio.data?.snapshotTotalUsd != null || portfolio.data?.latestSnapshot
+                  ? "Last known · not live"
+                  : "Not live"}
             </div>
           </div>
           <Button size="sm" variant="ghost" onClick={() => togglePause.mutate()} disabled={togglePause.isPending} aria-label="Pause or resume">

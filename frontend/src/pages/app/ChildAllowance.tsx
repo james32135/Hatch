@@ -222,9 +222,15 @@ export default function ChildAllowance() {
         toast.error(data?.note || data?.sodexError || "Order was not accepted by SoDEX");
       }
       qc.invalidateQueries({ queryKey: ["portfolio", childId] });
+      qc.invalidateQueries({ queryKey: ["portfolio-hist", childId] });
+      qc.invalidateQueries({ queryKey: ["portfolio-tx", childId] });
+      qc.invalidateQueries({ queryKey: ["lessons", childId] });
       qc.invalidateQueries({ queryKey: ["allowances"] });
       qc.invalidateQueries({ queryKey: ["order-verification"] });
       qc.invalidateQueries({ queryKey: ["market-discovery"] });
+      qc.invalidateQueries({ queryKey: ["eligible-markets"] });
+      // Keep polling portfolio so child/overview sync without manual refresh
+      void qc.refetchQueries({ queryKey: ["portfolio", childId] });
     },
     onError: (e: any) => {
       const map: Record<string, string> = {
@@ -274,7 +280,7 @@ export default function ChildAllowance() {
 
       <SectionCard
         title="Markets you can actually buy right now"
-        subtitle="Passed all 15 eligibility stages + dry validation. Live SoDEX only."
+        subtitle="Signed matcher capability required — dry reads alone never qualify."
       >
         {discovery.isLoading ? (
           <p className="text-sm text-white/45">Running eligibility scan on every SoDEX market…</p>

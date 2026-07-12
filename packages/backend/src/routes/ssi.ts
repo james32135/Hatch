@@ -105,14 +105,14 @@ export async function registerSsiRoutes(app: FastifyInstance): Promise<void> {
       const job = await enqueueJob("portfolio_sync", {
         trigger: "ssi_sync",
         childId: body.childId,
-      });
-      const lesson = await enqueueJob("lesson_generation", {
-        childId: body.childId,
+        profileId:
+          (req.headers["x-hatch-profile"] as string | undefined) ??
+          undefined,
       });
       return {
         ok: true,
-        enqueued: [job.id, lesson.id],
-        note: "Non-custodial sync — refreshes snapshots; does not place trades",
+        enqueued: [job.id],
+        note: "Non-custodial sync — refreshes snapshots; does not place trades. Lessons generate only after a material portfolio delta.",
       };
     },
   );

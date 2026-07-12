@@ -190,6 +190,7 @@ export async function buildPortfolioEngineView(input: {
   parentWallet: string;
   accountState: unknown | null;
   accountBalances?: unknown | null;
+  profileId?: string | null;
 }): Promise<{
   holdings: HoldingRow[];
   performance: PortfolioPerformance;
@@ -206,6 +207,7 @@ export async function buildPortfolioEngineView(input: {
       projection = await projectPortfolioUsd(
         input.accountState,
         input.accountBalances,
+        input.profileId,
       );
     } catch {
       projection = null;

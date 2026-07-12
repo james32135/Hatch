@@ -43,11 +43,13 @@ export interface SnapshotPricing {
 export async function priceAccountState(
   sodexAccountState: unknown,
   sodexBalances?: unknown,
+  profileId?: string | null,
 ): Promise<SnapshotPricing> {
   const balances = mergeBalanceSources(sodexBalances, sodexAccountState);
   const projection = await projectPortfolioUsd(
     sodexAccountState,
     sodexBalances,
+    profileId,
   );
   return {
     totalUsd: projection.totalUsd,

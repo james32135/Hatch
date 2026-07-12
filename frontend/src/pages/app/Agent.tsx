@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -23,113 +23,51 @@ type Msg = {
   marketsTop?: any[];
 };
 
-const GROUPS: Record<string, string[]> = {
-  Investment: [
-    "Best investment today",
-    "Where should I invest $20",
-    "Safest SSI",
-    "Compare MAG7 vs BTC",
-  ],
-  Markets: [
-    "Highest liquidity today",
-    "Market summary",
-    "Compare MAG7 vs USSI liquidity",
-    "Should I buy MAG7 today?",
-  ],
-  Portfolio: [
-    "Explain my portfolio",
-    "Explain my last trade",
-    "Why wasn't my last order filled?",
-    "Risk report",
-  ],
-  Learning: [
-    "Teach my child diversification",
-    "Explain dollar-cost averaging",
-    "Compare SSI indexes",
-  ],
-};
-
-function EmptyHero() {
-  return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col items-center px-4 pb-8 pt-10 text-center md:pt-16">
-      <motion.svg
-        viewBox="0 0 720 280"
-        className="mb-8 h-auto w-full max-w-lg"
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-        aria-hidden
-      >
-        <defs>
-          <linearGradient id="copilotGlow" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor="#34d399" stopOpacity="0.55" />
-            <stop offset="55%" stopColor="#38bdf8" stopOpacity="0.35" />
-            <stop offset="100%" stopColor="#a7f3d0" stopOpacity="0.15" />
-          </linearGradient>
-        </defs>
-        <rect width="720" height="280" rx="32" fill="url(#copilotGlow)" opacity="0.18" />
-        <motion.circle
-          cx="180"
-          cy="140"
-          r="48"
-          fill="none"
-          stroke="#34d399"
-          strokeWidth="1.5"
-          strokeOpacity="0.5"
-          animate={{ r: [44, 52, 44], opacity: [0.35, 0.7, 0.35] }}
-          transition={{ duration: 4.5, repeat: Infinity, ease: "easeInOut" }}
-        />
-        <motion.path
-          d="M120 170 C220 60, 320 200, 420 100 S580 70, 640 150"
-          fill="none"
-          stroke="#38bdf8"
-          strokeWidth="2.2"
-          strokeOpacity="0.75"
-          initial={{ pathLength: 0 }}
-          animate={{ pathLength: 1 }}
-          transition={{ duration: 1.6, ease: [0.16, 1, 0.3, 1] }}
-        />
-        {[160, 300, 440, 580].map((x, i) => (
-          <circle
-            key={x}
-            cx={x}
-            cy={[155, 120, 105, 145][i]}
-            r="7"
-            fill="#071018"
-            stroke="#34d399"
-            strokeWidth="2"
-          />
-        ))}
-        <text x="140" y="230" fill="#94a3b8" fontSize="13">
-          Family
-        </text>
-        <text x="300" y="230" fill="#94a3b8" fontSize="13">
-          Markets
-        </text>
-        <text x="440" y="230" fill="#94a3b8" fontSize="13">
-          Fill
-        </text>
-        <text x="560" y="230" fill="#94a3b8" fontSize="13">
-          Future
-        </text>
-      </motion.svg>
-
-      <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-emerald-300/75">
-        Investment Copilot
-      </p>
-      <h1 className="mt-3 text-balance text-4xl font-semibold tracking-tight text-white md:text-5xl">
-        Ask anything about investing for your family
-      </h1>
-      <p className="mt-4 max-w-xl text-pretty text-base leading-relaxed text-white/50">
-        Grounded in live SoDEX books, your wallet balances, and real receipts. No invented fills.
-      </p>
-    </div>
-  );
-}
+const GROUPS: { id: string; label: string; prompts: string[] }[] = [
+  {
+    id: "investment",
+    label: "Investment",
+    prompts: [
+      "Best investment today",
+      "Where should I invest $20",
+      "Safest SSI",
+      "Compare MAG7 vs BTC",
+    ],
+  },
+  {
+    id: "markets",
+    label: "Markets",
+    prompts: [
+      "Highest liquidity today",
+      "Market summary",
+      "Compare MAG7 vs USSI liquidity",
+      "Should I buy MAG7 today?",
+    ],
+  },
+  {
+    id: "portfolio",
+    label: "Portfolio",
+    prompts: [
+      "Explain my portfolio",
+      "Explain my last trade",
+      "Why wasn't my last order filled?",
+      "Risk report",
+    ],
+  },
+  {
+    id: "learning",
+    label: "Learning",
+    prompts: [
+      "Teach my child diversification",
+      "Explain dollar-cost averaging",
+      "Compare SSI indexes",
+    ],
+  },
+];
 
 function StreamingDots() {
   return (
-    <span className="inline-flex gap-1 px-1">
+    <span className="inline-flex gap-1 px-1" aria-hidden>
       {[0, 1, 2].map((i) => (
         <motion.span
           key={i}
@@ -142,13 +80,96 @@ function StreamingDots() {
   );
 }
 
+function EmptyState({
+  activeGroup,
+  onGroup,
+  onPrompt,
+}: {
+  activeGroup: string;
+  onGroup: (id: string) => void;
+  onPrompt: (text: string) => void;
+}) {
+  const group = GROUPS.find((g) => g.id === activeGroup) ?? GROUPS[0]!;
+
+  return (
+    <div className="mx-auto flex w-full max-w-2xl flex-col items-center px-1 pb-8 pt-6 text-center md:pt-10">
+      <motion.div
+        className="relative mb-8 flex h-16 w-16 items-center justify-center"
+        initial={{ opacity: 0, scale: 0.92 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+      >
+        <span
+          aria-hidden
+          className="absolute inset-0 rounded-2xl bg-emerald-400/15 blur-xl"
+        />
+        <span className="relative flex h-14 w-14 items-center justify-center rounded-2xl border border-emerald-400/25 bg-gradient-to-br from-emerald-400/20 to-sky-400/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
+          <Sparkles className="h-6 w-6 text-emerald-300" strokeWidth={1.5} />
+        </span>
+      </motion.div>
+
+      <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-emerald-300/70">
+        Investment Copilot
+      </p>
+      <h1 className="mt-3 max-w-lg text-balance text-3xl font-semibold tracking-tight text-white md:text-[2.5rem] md:leading-[1.15]">
+        Ask about investing for your family
+      </h1>
+      <p className="mt-3 max-w-md text-pretty text-sm leading-relaxed text-white/45 md:text-[15px]">
+        Live SoDEX books, wallet balances, and real receipts. Nothing invented.
+      </p>
+
+      <div className="mt-10 w-full">
+        <div
+          className="mb-4 flex flex-wrap justify-center gap-1.5"
+          role="tablist"
+          aria-label="Prompt categories"
+        >
+          {GROUPS.map((g) => {
+            const on = g.id === activeGroup;
+            return (
+              <button
+                key={g.id}
+                type="button"
+                role="tab"
+                aria-selected={on}
+                onClick={() => onGroup(g.id)}
+                className={`rounded-full px-3.5 py-1.5 text-xs transition ${
+                  on
+                    ? "bg-white text-black"
+                    : "border border-white/10 bg-transparent text-white/50 hover:border-white/20 hover:text-white/80"
+                }`}
+              >
+                {g.label}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="flex flex-wrap justify-center gap-2" role="tabpanel">
+          {group.prompts.map((p) => (
+            <button
+              key={p}
+              type="button"
+              onClick={() => onPrompt(p)}
+              className="rounded-full border border-white/[0.09] bg-white/[0.035] px-3.5 py-2 text-left text-[13px] text-white/65 transition hover:border-emerald-400/30 hover:bg-emerald-400/[0.06] hover:text-white"
+            >
+              {p}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Agent() {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Msg[]>([]);
-  const [panelOpen, setPanelOpen] = useState(true);
+  const [panelOpen, setPanelOpen] = useState(false);
   const [displayed, setDisplayed] = useState("");
+  const [activeGroup, setActiveGroup] = useState("investment");
   const endRef = useRef<HTMLDivElement>(null);
-  const scrollerRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const children = useQuery({
     queryKey: ["children"],
@@ -191,7 +212,6 @@ export default function Agent() {
           marketsTop: data.marketsTop,
         },
       ]);
-      // Soft stream reveal
       let i = 0;
       const step = Math.max(2, Math.floor(full.length / 80));
       const tick = () => {
@@ -208,6 +228,13 @@ export default function Agent() {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages, displayed, ask.isPending]);
 
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+  }, [input]);
+
   const submit = (text: string) => {
     const t = text.trim();
     if (!t || ask.isPending) return;
@@ -218,142 +245,125 @@ export default function Agent() {
   const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant");
   const board = lastAssistant?.marketsTop?.length
     ? lastAssistant.marketsTop
-    : markets.data?.markets?.filter((m: any) => m.executable).slice(0, 6) || [];
+    : markets.data?.markets?.filter((m: any) => m.executable).slice(0, 5) || [];
 
   const holdings = portfolio.data?.holdings || [];
   const totalUsd = portfolio.data?.totalUsd ?? portfolio.data?.performance?.currentUsd;
-
   const empty = messages.length === 0;
 
   return (
-    <div className="relative -mx-5 flex min-h-[calc(100dvh-7.5rem)] flex-col md:-mx-6">
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 opacity-70"
-        style={{
-          background:
-            "radial-gradient(ellipse 60% 40% at 50% 0%, rgba(52,211,153,0.12), transparent 55%), radial-gradient(ellipse 40% 30% at 80% 20%, rgba(56,189,248,0.08), transparent 50%)",
-        }}
-      />
-
-      <div className="relative flex min-h-0 flex-1 gap-0">
-        {/* Conversation ~72% */}
-        <div className="flex min-w-0 flex-[3] flex-col">
-          <div className="flex items-center justify-between px-4 pb-2 pt-1 md:px-8">
-            <div className="flex items-center gap-2 text-sm text-white/60">
-              <Sparkles className="h-4 w-4 text-emerald-300" strokeWidth={1.5} />
-              Copilot
+    <div
+      data-agent-page
+      className="relative -mx-5 flex h-[calc(100dvh-5.5rem)] flex-col overflow-hidden md:-mx-6 md:h-[calc(100dvh-4.75rem)]"
+    >
+      <div className="flex min-h-0 flex-1">
+        {/* Chat column */}
+        <section className="relative flex min-w-0 flex-1 flex-col">
+          <header className="flex shrink-0 items-center justify-between gap-3 px-4 py-2.5 md:px-6">
+            <div className="flex items-center gap-2 text-sm text-white/55">
+              <Sparkles className="h-3.5 w-3.5 text-emerald-300/90" strokeWidth={1.5} />
+              <span>Copilot</span>
             </div>
             <Button
               size="sm"
               variant="ghost"
-              className="text-white/50 hover:text-white lg:hidden"
+              className="h-8 gap-1.5 text-white/45 hover:text-white"
               onClick={() => setPanelOpen((v) => !v)}
-              aria-label="Toggle context"
+              aria-label={panelOpen ? "Hide context" : "Show context"}
             >
-              {panelOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}
+              {panelOpen ? (
+                <PanelRightClose className="h-4 w-4" />
+              ) : (
+                <PanelRightOpen className="h-4 w-4" />
+              )}
+              <span className="hidden text-xs sm:inline">Context</span>
             </Button>
-          </div>
+          </header>
 
-          <div ref={scrollerRef} className="min-h-0 flex-1 overflow-y-auto px-4 md:px-8">
-            {empty && <EmptyHero />}
-
-            <div className={`mx-auto w-full space-y-6 pb-36 ${empty ? "max-w-3xl" : "max-w-3xl pt-4"}`}>
-              <AnimatePresence initial={false}>
-                {messages.map((m, i) => {
-                  const isLastAssistant =
-                    m.role === "assistant" && i === messages.length - 1;
-                  const body =
-                    isLastAssistant && displayed && displayed.length < m.content.length
-                      ? displayed
-                      : m.content;
-                  return (
-                    <motion.div
-                      key={`${m.role}-${i}`}
-                      initial={{ opacity: 0, y: 8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ type: "spring", stiffness: 140, damping: 22 }}
-                      className={m.role === "user" ? "flex justify-end" : "flex justify-start"}
-                    >
-                      {m.role === "user" ? (
-                        <div className="max-w-[85%] rounded-3xl bg-white px-5 py-3 text-[15px] leading-relaxed text-black shadow-sm">
-                          {m.content}
-                        </div>
-                      ) : (
-                        <div className="w-full max-w-none">
-                          <div className="prose prose-invert prose-p:leading-relaxed prose-headings:tracking-tight prose-pre:bg-black/40 prose-table:text-sm max-w-none text-[15px] text-white/88">
-                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{body}</ReactMarkdown>
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 md:px-6">
+            {empty ? (
+              <EmptyState
+                activeGroup={activeGroup}
+                onGroup={setActiveGroup}
+                onPrompt={submit}
+              />
+            ) : (
+              <div className="mx-auto w-full max-w-2xl space-y-7 py-4 pb-6">
+                <AnimatePresence initial={false}>
+                  {messages.map((m, i) => {
+                    const isLastAssistant =
+                      m.role === "assistant" && i === messages.length - 1;
+                    const body =
+                      isLastAssistant && displayed && displayed.length < m.content.length
+                        ? displayed
+                        : m.content;
+                    return (
+                      <motion.div
+                        key={`${m.role}-${i}`}
+                        initial={{ opacity: 0, y: 6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ type: "spring", stiffness: 160, damping: 24 }}
+                        className={m.role === "user" ? "flex justify-end" : "block"}
+                      >
+                        {m.role === "user" ? (
+                          <div className="max-w-[min(100%,36rem)] rounded-3xl bg-white px-4 py-2.5 text-[15px] leading-relaxed text-black">
+                            {m.content}
                           </div>
-                          {m.sources?.length ? (
-                            <div className="mt-4 flex flex-wrap gap-2">
-                              {m.sources.slice(0, 6).map((s) => (
-                                <span
-                                  key={s}
-                                  className="rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-[10px] text-white/40"
-                                >
-                                  {s.replace(/^SoDEX GET /, "").slice(0, 48)}
-                                </span>
-                              ))}
+                        ) : (
+                          <div>
+                            <div className="prose prose-invert prose-p:my-3 prose-p:leading-relaxed prose-headings:mb-2 prose-headings:mt-5 prose-headings:tracking-tight prose-pre:rounded-xl prose-pre:bg-black/50 prose-table:text-sm max-w-none text-[15px] text-white/88">
+                              <ReactMarkdown remarkPlugins={[remarkGfm]}>{body}</ReactMarkdown>
                             </div>
-                          ) : null}
-                          {m.followUps?.length ? (
-                            <div className="mt-4 flex flex-wrap gap-2">
-                              {m.followUps.map((f) => (
-                                <button
-                                  key={f}
-                                  type="button"
-                                  onClick={() => submit(f)}
-                                  className="inline-flex items-center gap-1 rounded-full border border-emerald-400/20 bg-emerald-400/5 px-3 py-1.5 text-xs text-emerald-100/80 transition hover:bg-emerald-400/10"
-                                >
-                                  {f} <ChevronRight className="h-3 w-3" />
-                                </button>
-                              ))}
-                            </div>
-                          ) : null}
-                        </div>
-                      )}
-                    </motion.div>
-                  );
-                })}
-              </AnimatePresence>
-              {ask.isPending && (
-                <div className="flex items-center gap-3 text-sm text-white/50">
-                  <StreamingDots />
-                  Reading live SoDEX markets and your portfolio…
-                </div>
-              )}
-              <div ref={endRef} />
-            </div>
+                            {m.sources?.length ? (
+                              <div className="mt-4 flex flex-wrap gap-1.5">
+                                {m.sources.slice(0, 5).map((s) => (
+                                  <span
+                                    key={s}
+                                    className="rounded-md border border-white/8 bg-white/[0.03] px-2 py-0.5 text-[10px] text-white/35"
+                                  >
+                                    {s.replace(/^SoDEX GET /, "").slice(0, 40)}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : null}
+                            {m.followUps?.length ? (
+                              <div className="mt-4 flex flex-wrap gap-2">
+                                {m.followUps.map((f) => (
+                                  <button
+                                    key={f}
+                                    type="button"
+                                    onClick={() => submit(f)}
+                                    className="inline-flex items-center gap-1 rounded-full border border-emerald-400/20 bg-emerald-400/[0.05] px-3 py-1.5 text-xs text-emerald-100/75 transition hover:bg-emerald-400/10"
+                                  >
+                                    {f}
+                                    <ChevronRight className="h-3 w-3" />
+                                  </button>
+                                ))}
+                              </div>
+                            ) : null}
+                          </div>
+                        )}
+                      </motion.div>
+                    );
+                  })}
+                </AnimatePresence>
+                {ask.isPending && (
+                  <div className="flex items-center gap-3 text-sm text-white/45">
+                    <StreamingDots />
+                    Reading live SoDEX markets…
+                  </div>
+                )}
+                <div ref={endRef} />
+              </div>
+            )}
           </div>
 
-          {/* Composer */}
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-[#050507] via-[#050507]/95 to-transparent pb-3 pt-16">
-            <div className="pointer-events-auto mx-auto w-full max-w-3xl px-4 md:px-8">
-              {empty && (
-                <div className="mb-4 space-y-3">
-                  {Object.entries(GROUPS).map(([group, prompts]) => (
-                    <div key={group}>
-                      <div className="mb-1.5 text-[10px] font-medium uppercase tracking-[0.18em] text-white/30">
-                        {group}
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {prompts.map((p) => (
-                          <button
-                            key={p}
-                            type="button"
-                            onClick={() => submit(p)}
-                            className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs text-white/60 transition hover:border-emerald-400/25 hover:text-white"
-                          >
-                            {p}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-              <div className="flex items-end gap-2 rounded-[1.75rem] border border-white/10 bg-[#0c0c12]/95 p-2 shadow-[0_20px_60px_-30px_rgba(0,0,0,0.8),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-xl">
+          {/* Composer — flex footer, never overlays hero */}
+          <div className="shrink-0 border-t border-white/[0.05] bg-[#050507]/90 px-4 pb-4 pt-3 backdrop-blur-md md:px-6 md:pb-5">
+            <div className="mx-auto w-full max-w-2xl">
+              <div className="flex items-end gap-2 rounded-[1.5rem] border border-white/[0.1] bg-[#0d0d12] p-1.5 shadow-[0_12px_40px_-24px_rgba(0,0,0,0.9)]">
                 <textarea
+                  ref={textareaRef}
                   value={input}
                   rows={1}
                   onChange={(e) => setInput(e.target.value)}
@@ -363,124 +373,168 @@ export default function Agent() {
                       submit(input);
                     }
                   }}
-                  placeholder="Ask about MAG7, liquidity, $20 routing, or a receipt…"
-                  className="max-h-40 min-h-[48px] flex-1 resize-none bg-transparent px-3 py-3 text-[15px] text-white outline-none placeholder:text-white/30"
+                  placeholder="Ask about MAG7, liquidity, $20 routing…"
+                  className="max-h-40 min-h-[44px] flex-1 resize-none bg-transparent px-3.5 py-3 text-[15px] leading-snug text-white outline-none placeholder:text-white/30"
                 />
                 <Button
-                  className="mb-1 h-11 w-11 shrink-0 rounded-2xl bg-emerald-400 p-0 text-black hover:bg-emerald-300"
+                  className="mb-0.5 h-10 w-10 shrink-0 rounded-2xl bg-emerald-400 p-0 text-black hover:bg-emerald-300 disabled:opacity-40"
                   disabled={ask.isPending || !input.trim()}
                   onClick={() => submit(input)}
                   aria-label="Send"
                 >
-                  <ArrowUp className="h-5 w-5" strokeWidth={2} />
+                  <ArrowUp className="h-4 w-4" strokeWidth={2.25} />
                 </Button>
               </div>
-              <p className="mt-2 text-center text-[10px] text-white/25">
-                Answers cite official SoDEX APIs. Path A settles vault tokens on ValueChain SoDEX, not Base SSI site.
+              <p className="mt-2 text-center text-[10px] leading-snug text-white/25">
+                Grounded in official SoDEX APIs. Path A uses vault tokens on ValueChain SoDEX.
               </p>
             </div>
           </div>
-        </div>
+        </section>
 
-        {/* Context panel ~28% */}
-        <aside
-          className={`${
-            panelOpen ? "flex" : "hidden lg:flex"
-          } w-full max-w-full flex-col border-l border-white/[0.06] bg-[#07070b]/70 backdrop-blur-xl lg:w-[min(28%,22rem)] lg:max-w-[22rem] ${
-            panelOpen ? "" : "lg:hidden"
-          } absolute inset-y-0 right-0 z-20 lg:static`}
-        >
-          <div className="flex items-center justify-between border-b border-white/[0.06] px-4 py-3">
-            <span className="text-xs font-medium uppercase tracking-[0.16em] text-white/40">Context</span>
-            <button
-              type="button"
-              className="text-white/40 hover:text-white"
-              onClick={() => setPanelOpen(false)}
-              aria-label="Collapse"
+        {/* Context — optional, no duplicate prompts */}
+        <AnimatePresence initial={false}>
+          {panelOpen && (
+            <motion.aside
+              initial={{ width: 0, opacity: 0 }}
+              animate={{ width: 288, opacity: 1 }}
+              exit={{ width: 0, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 280, damping: 32 }}
+              className="hidden h-full shrink-0 overflow-hidden border-l border-white/[0.06] bg-[#07070b]/80 backdrop-blur-xl md:block"
             >
-              <PanelRightClose className="h-4 w-4" />
-            </button>
-          </div>
-          <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4">
-            <section>
-              <h3 className="mb-2 text-xs text-white/50">Portfolio snapshot</h3>
-              <div className="rounded-2xl border border-white/[0.07] bg-white/[0.03] p-3">
-                <div className="font-mono text-lg text-white">
-                  {totalUsd != null ? fmtUsd(totalUsd) : "—"}
+              <div className="flex h-full w-72 flex-col">
+                <div className="flex items-center justify-between px-4 py-3">
+                  <span className="text-[10px] font-medium uppercase tracking-[0.16em] text-white/35">
+                    Context
+                  </span>
+                  <button
+                    type="button"
+                    className="rounded-lg p-1 text-white/35 hover:bg-white/[0.04] hover:text-white"
+                    onClick={() => setPanelOpen(false)}
+                    aria-label="Close context"
+                  >
+                    <PanelRightClose className="h-4 w-4" />
+                  </button>
                 </div>
-                <div className="mt-1 text-[11px] text-white/35">Live SoDEX balances only</div>
-                <div className="mt-3 space-y-1.5">
-                  {holdings.slice(0, 4).map((h: any) => (
-                    <div key={h.symbol || h.asset} className="flex justify-between text-xs text-white/55">
-                      <span>{h.symbol || h.asset}</span>
-                      <span className="font-mono">{h.qty ?? h.quantity ?? h.balance ?? "—"}</span>
+
+                <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 pb-6">
+                  <section>
+                    <h3 className="mb-2 text-[11px] text-white/40">Portfolio</h3>
+                    <div className="rounded-2xl border border-white/[0.07] bg-white/[0.025] p-3.5">
+                      <div className="font-mono text-xl tracking-tight text-white">
+                        {totalUsd != null ? fmtUsd(totalUsd) : "—"}
+                      </div>
+                      <p className="mt-1 text-[11px] text-white/30">Live SoDEX balances</p>
+                      <div className="mt-3 space-y-2">
+                        {holdings.slice(0, 4).map((h: any) => (
+                          <div
+                            key={h.symbol || h.asset}
+                            className="flex justify-between gap-2 text-xs text-white/55"
+                          >
+                            <span className="truncate">{h.symbol || h.asset}</span>
+                            <span className="shrink-0 font-mono text-white/70">
+                              {h.qty ?? h.quantity ?? h.balance ?? "—"}
+                            </span>
+                          </div>
+                        ))}
+                        {!holdings.length && (
+                          <p className="text-xs text-white/30">No holdings yet.</p>
+                        )}
+                      </div>
                     </div>
-                  ))}
-                  {!holdings.length && (
-                    <p className="text-xs text-white/35">No holdings yet from official balances.</p>
-                  )}
+                  </section>
+
+                  <section>
+                    <h3 className="mb-2 text-[11px] text-white/40">Executable markets</h3>
+                    <div className="overflow-hidden rounded-2xl border border-white/[0.07]">
+                      {board.length === 0 && (
+                        <p className="px-3 py-4 text-xs text-white/30">Scanning…</p>
+                      )}
+                      {board.slice(0, 5).map((m: any, idx: number) => (
+                        <div
+                          key={m.symbol}
+                          className={`px-3 py-2.5 ${
+                            idx > 0 ? "border-t border-white/[0.05]" : ""
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="truncate text-xs font-medium text-white/80">
+                              {String(m.symbol).replace(/_vUSDC$/, "")}
+                            </span>
+                            <span
+                              className={`shrink-0 text-[9px] uppercase tracking-wide ${
+                                m.executable ? "text-emerald-300/85" : "text-amber-200/70"
+                              }`}
+                            >
+                              {m.executable ? "Live" : "Blocked"}
+                            </span>
+                          </div>
+                          <div className="mt-0.5 font-mono text-[10px] text-white/35">
+                            {m.bestAsk ?? "—"} · ${Number(m.askDepthUsd || 0).toFixed(0)} ·{" "}
+                            {m.score}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
                 </div>
               </div>
-            </section>
+            </motion.aside>
+          )}
+        </AnimatePresence>
+      </div>
 
-            <section>
-              <h3 className="mb-2 text-xs text-white/50">Executable markets</h3>
+      {/* Mobile context sheet */}
+      <AnimatePresence>
+        {panelOpen && (
+          <motion.div
+            className="fixed inset-0 z-50 md:hidden"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <button
+              type="button"
+              className="absolute inset-0 bg-black/60"
+              aria-label="Close"
+              onClick={() => setPanelOpen(false)}
+            />
+            <motion.div
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", stiffness: 320, damping: 34 }}
+              className="absolute inset-x-0 bottom-0 max-h-[70dvh] overflow-y-auto rounded-t-3xl border border-white/10 bg-[#0a0a0f] p-5"
+            >
+              <div className="mb-4 flex items-center justify-between">
+                <span className="text-sm text-white/70">Context</span>
+                <button type="button" onClick={() => setPanelOpen(false)} aria-label="Close">
+                  <PanelRightClose className="h-4 w-4 text-white/40" />
+                </button>
+              </div>
+              <div className="mb-4 font-mono text-2xl text-white">
+                {totalUsd != null ? fmtUsd(totalUsd) : "—"}
+              </div>
+              <p className="mb-4 text-xs text-white/35">Live SoDEX portfolio</p>
               <div className="space-y-2">
-                {board.slice(0, 6).map((m: any) => (
+                {board.slice(0, 5).map((m: any) => (
                   <div
                     key={m.symbol}
-                    className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2"
+                    className="flex items-center justify-between rounded-xl border border-white/[0.06] px-3 py-2 text-xs"
                   >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="truncate text-xs text-white/80">
-                        {String(m.symbol).replace(/_vUSDC$/, "")}
-                      </span>
-                      <span
-                        className={`text-[10px] uppercase ${
-                          m.executable ? "text-emerald-300/90" : "text-amber-200/80"
-                        }`}
-                      >
-                        {m.executable ? "Live" : "Blocked"}
-                      </span>
-                    </div>
-                    <div className="mt-1 font-mono text-[10px] text-white/40">
-                      ask {m.bestAsk ?? "—"} · depth ${Number(m.askDepthUsd || 0).toFixed(0)} · score{" "}
-                      {m.score}
-                    </div>
+                    <span className="text-white/75">
+                      {String(m.symbol).replace(/_vUSDC$/, "")}
+                    </span>
+                    <span className="font-mono text-white/40">
+                      ${Number(m.askDepthUsd || 0).toFixed(0)}
+                    </span>
                   </div>
                 ))}
               </div>
-            </section>
-
-            <section>
-              <h3 className="mb-2 text-xs text-white/50">Suggested</h3>
-              <div className="flex flex-col gap-1.5">
-                {["Highest liquidity today", "Explain my last trade", "Safest SSI"].map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={() => submit(s)}
-                    className="rounded-xl border border-white/[0.06] px-3 py-2 text-left text-xs text-white/60 transition hover:bg-white/[0.04] hover:text-white"
-                  >
-                    {s}
-                  </button>
-                ))}
-              </div>
-            </section>
-          </div>
-        </aside>
-
-        {!panelOpen && (
-          <button
-            type="button"
-            className="absolute right-3 top-3 z-10 hidden rounded-xl border border-white/10 bg-black/40 p-2 text-white/50 hover:text-white lg:block"
-            onClick={() => setPanelOpen(true)}
-            aria-label="Open context"
-          >
-            <PanelRightOpen className="h-4 w-4" />
-          </button>
+            </motion.div>
+          </motion.div>
         )}
-      </div>
+      </AnimatePresence>
     </div>
   );
 }

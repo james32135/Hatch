@@ -112,7 +112,7 @@ export default function AppShell() {
           </nav>
         </aside>
 
-        <main className="min-w-0 flex-1 pb-16">
+        <main className="min-w-0 flex-1 pb-16 md:pb-6 [&:has([data-agent-page])]:pb-0">
           <Outlet />
         </main>
       </div>

@@ -30,6 +30,7 @@ import ValueChain from "@/pages/app/ValueChain";
 import Activity from "@/pages/app/Activity";
 import Notifications from "@/pages/app/Notifications";
 import Settings from "@/pages/app/Settings";
+import { Transparency } from "@/pages/app/Transparency";
 
 import ChildHome from "@/pages/child/ChildHome";
 import ChildWhy from "@/pages/child/ChildWhy";
@@ -75,6 +76,7 @@ const App = () => (
               </Route>
               <Route path="sodex" element={<Sodex />} />
               <Route path="valuechain" element={<ValueChain />} />
+              <Route path="transparency" element={<Transparency />} />
               <Route path="activity" element={<Activity />} />
               <Route path="notifications" element={<Notifications />} />
               <Route path="settings" element={<Settings />} />

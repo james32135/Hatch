@@ -6,8 +6,9 @@ import { EmptyState } from "@/components/common/EmptyState";
 import { Button } from "@/components/ui/button";
 import { StatusPip } from "@/components/common/StatusPip";
 import { toast } from "sonner";
-import { fmtRelative } from "@/lib/format";
-import { friendlyLessonTitle, friendlyLessonStatus } from "@/lib/copy";
+import { fmtRelative, fmtUsd } from "@/lib/format";
+import { friendlyLessonTitle, friendlyLessonStatus, friendlyMarket } from "@/lib/copy";
+import { resolvePortfolioUsd } from "@/lib/portfolio";
 import { BookOpen } from "lucide-react";
 
 export default function ChildLessons() {
@@ -16,6 +17,11 @@ export default function ChildLessons() {
   const lessons = useQuery({
     queryKey: ["lessons", childId],
     queryFn: () => api.get<any>(`/api/lessons/${childId}`),
+    enabled: !!childId,
+  });
+  const portfolio = useQuery({
+    queryKey: ["portfolio", childId],
+    queryFn: () => api.get<any>(`/api/portfolio/${childId}`),
     enabled: !!childId,
   });
   const gen = useMutation({
@@ -27,13 +33,27 @@ export default function ChildLessons() {
     onError: (e: any) => toast.error(e?.message || "Couldn't start a lesson"),
   });
   const items = lessons.data?.lessons || lessons.data || [];
+  const total = resolvePortfolioUsd(portfolio.data);
+  const holdings = portfolio.data?.holdings || [];
+  const top = holdings
+    .slice()
+    .sort((a: any, b: any) => Number(b.usdValue ?? b.valueUsd ?? 0) - Number(a.usdValue ?? a.valueUsd ?? 0))[0];
+  const contextHint =
+    total != null
+      ? `Portfolio ${fmtUsd(total)}${top ? ` · largest holding ${friendlyMarket(top.symbol || top.token)}` : ""}`
+      : "Tied to their live portfolio when available.";
 
   return (
     <SectionCard
       title="Lessons"
-      subtitle="Short explanations tied to their real portfolio."
+      subtitle={`Short explanations from real holdings and moves. ${contextHint}`}
       action={
-        <Button size="sm" className="bg-white text-black hover:bg-white/90" onClick={() => gen.mutate()} disabled={gen.isPending}>
+        <Button
+          size="sm"
+          className="bg-white text-black hover:bg-white/90"
+          onClick={() => gen.mutate()}
+          disabled={gen.isPending}
+        >
           New lesson
         </Button>
       }
@@ -61,7 +81,7 @@ export default function ChildLessons() {
                 />
               </summary>
               <div className="border-t border-white/8 p-4 text-sm leading-relaxed text-white/75 whitespace-pre-wrap">
-                {l.body || "—"}
+                {l.body || "-"}
               </div>
             </details>
           ))}

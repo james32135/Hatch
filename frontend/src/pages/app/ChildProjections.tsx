@@ -5,6 +5,7 @@ import { SectionCard } from "@/components/common/SectionCard";
 import { Button } from "@/components/ui/button";
 import { LineChart, Line, ResponsiveContainer, XAxis, YAxis, Tooltip, Legend } from "recharts";
 import { fmtUsd } from "@/lib/format";
+import { motion } from "framer-motion";
 
 export default function ChildProjections() {
   const { childId } = useParams();
@@ -46,6 +47,12 @@ export default function ChildProjections() {
     ? Number(weeklyPack.base.points[weeklyPack.base.points.length - 1]?.valueUsd ?? 0)
     : null;
 
+  const pointAt = (year: number) => {
+    const pts = weeklyPack.base?.points || [];
+    const hit = pts.find((p: any) => Number(p.year) === year) || pts[Math.min(year - 1, pts.length - 1)];
+    return hit ? Number(hit.valueUsd ?? 0) : null;
+  };
+
   const bandLabel = (k: string) => {
     const map: Record<string, string> = {
       conservative: "Careful",
@@ -54,6 +61,29 @@ export default function ChildProjections() {
     };
     return map[k.toLowerCase()] || k;
   };
+
+  const milestones = [
+    {
+      label: "Week 1",
+      body: `Their first ${fmtUsd(weekly)} lands. The habit begins.`,
+      value: weekly,
+    },
+    {
+      label: "Year 1",
+      body: "About a year of quiet consistency. Still early, already real.",
+      value: pointAt(1),
+    },
+    {
+      label: "Year 5",
+      body: "Five years of showing up. Compounding starts to feel visible.",
+      value: pointAt(5),
+    },
+    {
+      label: "Year 10",
+      body: "A decade of weekly care. This is the story you are writing together.",
+      value: pointAt(10) ?? terminal,
+    },
+  ];
 
   return (
     <div className="space-y-4">
@@ -81,20 +111,49 @@ export default function ChildProjections() {
         title="10-year story"
         subtitle={`Weekly input: ${fmtUsd(weekly)}`}
         action={
-          <Button className="bg-white text-black hover:bg-white/90" size="sm" onClick={() => scenarios.mutate()} disabled={scenarios.isPending}>
+          <Button
+            className="bg-white text-black hover:bg-white/90"
+            size="sm"
+            onClick={() => scenarios.mutate()}
+            disabled={scenarios.isPending}
+          >
             {scenarios.isPending ? "Calculating…" : chart.length ? "Refresh" : "Show story"}
           </Button>
         }
       >
         {scenarios.isError && (
-          <div className="mb-3 text-sm text-rose-300">{(scenarios.error as any)?.message || "Couldn't run projection"}</div>
+          <div className="mb-3 text-sm text-rose-300">
+            {(scenarios.error as any)?.message || "Couldn't run projection"}
+          </div>
+        )}
+
+        {chart.length > 0 && (
+          <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {milestones.map((m, i) => (
+              <motion.div
+                key={m.label}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.06, type: "spring", stiffness: 120, damping: 18 }}
+                className="rounded-2xl border border-white/10 bg-gradient-to-b from-sky-500/[0.07] to-transparent p-4"
+              >
+                <div className="text-xs font-medium text-sky-200/80">{m.label}</div>
+                <div className="mt-2 text-xl font-medium tracking-tight text-white">
+                  {m.value != null && Number.isFinite(m.value) ? fmtUsd(m.value) : "-"}
+                </div>
+                <p className="mt-2 text-xs leading-relaxed text-white/50">{m.body}</p>
+              </motion.div>
+            ))}
+          </div>
         )}
 
         {terminal != null && Number.isFinite(terminal) && (
           <div className="mb-4 rounded-2xl border border-sky-400/20 bg-sky-400/[0.06] p-4">
             <div className="text-xs uppercase tracking-wider text-sky-200/70">Balanced scenario</div>
             <div className="mt-1 text-2xl font-medium tracking-tight">{fmtUsd(terminal)}</div>
-            <p className="mt-1 text-xs text-white/50">Illustrative total after 10 years of weekly investing. Not a guarantee.</p>
+            <p className="mt-1 text-xs text-white/50">
+              Illustrative total after 10 years of weekly investing. Not a guarantee.
+            </p>
           </div>
         )}
 
@@ -103,7 +162,10 @@ export default function ChildProjections() {
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={chart}>
                 <XAxis dataKey="year" tick={{ fill: "#71717a", fontSize: 11 }} />
-                <YAxis tick={{ fill: "#71717a", fontSize: 11 }} tickFormatter={(v) => fmtUsd(v).replace(".00", "")} />
+                <YAxis
+                  tick={{ fill: "#71717a", fontSize: 11 }}
+                  tickFormatter={(v) => fmtUsd(v).replace(".00", "")}
+                />
                 <Tooltip
                   contentStyle={{ background: "#0a0a0a", border: "1px solid rgba(255,255,255,0.1)", fontSize: 12 }}
                   formatter={(v: any, name: any) => [fmtUsd(Number(v)), bandLabel(String(name))]}
@@ -128,8 +190,8 @@ export default function ChildProjections() {
         )}
 
         <div className="mt-3 rounded-xl border border-amber-400/20 bg-amber-400/[0.05] p-3 text-xs leading-relaxed text-amber-100/80">
-          {(scenarios.data?.note || assumptions.data?.note || "Assumption bands for education only.")} Markets can go down
-          as well as up.
+          {(scenarios.data?.note || assumptions.data?.note || "Assumption bands for education only.")} Markets can go
+          down as well as up.
         </div>
       </SectionCard>
     </div>

@@ -10,22 +10,61 @@ import { fmtUsd, fmtRelative } from "@/lib/format";
 import { friendlyRisk, friendlyReadiness } from "@/lib/copy";
 import { useSignTypedData, useAccount } from "wagmi";
 import { StatusPip } from "@/components/common/StatusPip";
-import { useState } from "react";
+import { StoryPipeline, derivePipeline } from "@/components/story/StoryPipeline";
+import { ExplorerLinkCard } from "@/components/story/ExplorerLink";
+import { useInfraLive } from "@/components/story/InfraStatus";
+import { useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import { CheckCircle2 } from "lucide-react";
 
 export default function ChildAllowance() {
   const { childId } = useParams();
   const qc = useQueryClient();
+  const live = useInfraLive();
   const { signTypedDataAsync } = useSignTypedData();
   const { address } = useAccount();
   const [signing, setSigning] = useState(false);
   const [celebrated, setCelebrated] = useState(false);
+  const [lastOrderId, setLastOrderId] = useState<string | null>(null);
 
   const allowances = useQuery({ queryKey: ["allowances"], queryFn: () => api.get<any>("/api/allowances") });
   const readiness = useQuery({ queryKey: ["sodex-readiness"], queryFn: () => api.get<any>("/api/sodex/readiness") });
+  const handoffs = useQuery({
+    queryKey: ["allowances", "handoffs"],
+    queryFn: () => api.get<any>("/api/allowances/handoffs"),
+  });
+  const portfolio = useQuery({
+    queryKey: ["portfolio", childId],
+    queryFn: () => api.get<any>(`/api/portfolio/${childId}`),
+    enabled: !!childId,
+  });
+  const lessons = useQuery({
+    queryKey: ["lessons", childId],
+    queryFn: () => api.get<any>(`/api/lessons/${childId}`),
+    enabled: !!childId,
+  });
   const policy = (allowances.data?.policies || []).find((p: any) => p.childId === childId);
   const ready = friendlyReadiness(readiness.data?.nextStep);
+  const pendingForChild = (handoffs.data?.handoffs || []).some(
+    (h: any) => h.childId === childId && (h.status === "pending" || !h.status),
+  );
+  const holdings = portfolio.data?.holdings || [];
+  const lessonItems = lessons.data?.lessons || lessons.data || [];
+
+  const pipeline = useMemo(
+    () =>
+      derivePipeline({
+        hasPolicy: !!policy,
+        policyPaused: !!policy?.paused,
+        pendingHandoff: pendingForChild || celebrated,
+        hasRelay: celebrated || !!lastOrderId,
+        orderStatus: celebrated ? "SUBMITTED" : null,
+        hasHoldingsOrTx: holdings.length > 0,
+        hasLesson: lessonItems.length > 0,
+        valuechainOk: live.valuechainOk,
+      }),
+    [policy, pendingForChild, celebrated, lastOrderId, holdings.length, lessonItems.length, live.valuechainOk],
+  );
 
   const trigger = useMutation({
     mutationFn: () => api.post<any>(`/api/allowances/${policy?.id}/trigger`, {}),
@@ -71,8 +110,9 @@ export default function ChildAllowance() {
     },
     onMutate: () => setSigning(true),
     onSettled: () => setSigning(false),
-    onSuccess: () => {
+    onSuccess: (data) => {
       setCelebrated(true);
+      if (data?.signedOrderId) setLastOrderId(String(data.signedOrderId));
       toast.success("Investment submitted");
       qc.invalidateQueries({ queryKey: ["portfolio", childId] });
       qc.invalidateQueries({ queryKey: ["allowances"] });
@@ -101,6 +141,12 @@ export default function ChildAllowance() {
 
   return (
     <div className="space-y-4">
+      <StoryPipeline
+        steps={pipeline}
+        title="This week's path"
+        subtitle="Allowance to wallet approval to SoDEX to their growing future."
+      />
+
       {celebrated && (
         <motion.div
           initial={{ opacity: 0, scale: 0.96 }}
@@ -110,6 +156,18 @@ export default function ChildAllowance() {
           <CheckCircle2 className="h-5 w-5" />
           Nice work. Their portfolio just took another step forward.
         </motion.div>
+      )}
+
+      {(celebrated || lastOrderId) && (
+        <ExplorerLinkCard
+          title="SoDEX order"
+          status={celebrated ? "Submitted" : "Pending"}
+          statusTone="ok"
+          hash={lastOrderId}
+          explorerUrl={live.explorer?.log}
+          networkLabel={`${live.network} · SoDEX + ValueChain`}
+          detail="Your wallet approved this investment. The order was relayed to SoDEX for execution."
+        />
       )}
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -123,10 +181,20 @@ export default function ChildAllowance() {
             <Row k="Status" v={policy.paused ? "Paused" : "Active"} />
           </div>
           <div className="mt-4 flex flex-wrap gap-2">
-            <Button variant="secondary" className="bg-white/5 hover:bg-white/10" onClick={() => togglePause.mutate()} disabled={togglePause.isPending}>
+            <Button
+              variant="secondary"
+              className="bg-white/5 hover:bg-white/10"
+              onClick={() => togglePause.mutate()}
+              disabled={togglePause.isPending}
+            >
               {policy.paused ? "Resume" : "Pause"}
             </Button>
-            <Button variant="secondary" className="bg-white/5 hover:bg-white/10" onClick={() => trigger.mutate()} disabled={trigger.isPending}>
+            <Button
+              variant="secondary"
+              className="bg-white/5 hover:bg-white/10"
+              onClick={() => trigger.mutate()}
+              disabled={trigger.isPending}
+            >
               Invest this week now
             </Button>
           </div>
@@ -135,13 +203,14 @@ export default function ChildAllowance() {
         <SectionCard title="Invest now" subtitle="Confirm in your wallet. You stay in control of every investment.">
           {notReady ? (
             <div className="rounded-xl border border-amber-400/25 bg-amber-400/[0.06] p-3 text-xs text-amber-100/90">
-              Almost ready. <StatusPip tone={ready.tone} label={ready.label} className="inline-flex" /> Finish setup under Trading, then come back.
+              Almost ready. <StatusPip tone={ready.tone} label={ready.label} className="inline-flex" /> Finish setup
+              under Trading, then come back.
             </div>
           ) : (
             <ol className="space-y-2 text-sm text-white/70">
               <li>1. We prepare this week's investment for you.</li>
               <li>2. You approve it in your wallet (no network fee for this step).</li>
-              <li>3. The investment is placed securely on your behalf.</li>
+              <li>3. The investment is placed securely on SoDEX on your behalf.</li>
             </ol>
           )}
           <Button
@@ -156,7 +225,7 @@ export default function ChildAllowance() {
             <AdvancedDetails label="How this works">
               <p className="text-xs leading-relaxed text-white/55">
                 You approve a secure investment request with your own wallet. HATCH never holds your trading keys.
-                Orders are checked and forwarded to the exchange for execution.
+                Orders are checked and forwarded to SoDEX for execution, then their portfolio and lessons update.
               </p>
             </AdvancedDetails>
           </div>

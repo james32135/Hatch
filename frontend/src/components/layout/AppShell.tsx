@@ -9,9 +9,11 @@ import {
   Activity as ActivityIcon,
   Home,
   BookOpen,
+  Eye,
 } from "lucide-react";
 import HatchLogo from "@/components/common/HatchLogo";
 import { StatusPip } from "@/components/common/StatusPip";
+import { WalkthroughGuide } from "@/components/story/WalkthroughGuide";
 import { useSession } from "@/hooks/useSession";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
@@ -97,6 +99,9 @@ export default function AppShell() {
             <NavLink to="/app/valuechain" className={linkCls}>
               <ShieldCheck className="h-4 w-4" strokeWidth={1.5} /> Security
             </NavLink>
+            <NavLink to="/app/transparency" className={linkCls}>
+              <Eye className="h-4 w-4" strokeWidth={1.5} /> Transparency
+            </NavLink>
             <NavLink to="/app/settings" className={linkCls}>
               <BookOpen className="h-4 w-4" strokeWidth={1.5} /> Settings
             </NavLink>
@@ -107,6 +112,8 @@ export default function AppShell() {
           <Outlet />
         </main>
       </div>
+
+      <WalkthroughGuide />
 
       {/* Mobile bottom nav */}
       <nav className="fixed inset-x-0 bottom-0 z-40 flex border-t border-white/[0.06] bg-[#050507]/95 backdrop-blur-xl md:hidden">

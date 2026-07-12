@@ -24,6 +24,10 @@ Failure screenshot:
 
 ![Production Copilot showing Failed to fetch](copilot-failed-fetch-production.png)
 
+Post-fix production validation:
+
+![Production Copilot returning Safest SSI](copilot-success-production.png)
+
 Chrome DevTools request:
 
 ```text
@@ -247,6 +251,27 @@ education, not asset ownership.
 - [x] Missing production ACAO reproduced outside the browser
 - [x] Local patched SSE returned ACAO and trace ID
 - [x] Backend typecheck passed
-- [ ] Production deployment contains the fix
-- [ ] Production browser `Safest SSI` completes after deployment
+- [x] Complete backend suite passed: 24 files, 85 tests
+- [x] Production deployment contains commit `d9fa269`
+- [x] Production browser `Safest SSI` completed after deployment
+
+## Post-deployment production validation
+
+The same authenticated Chrome session repeated the same UI action after Render
+deployed the fix.
+
+```text
+POST https://hatch-api-h018.onrender.com/api/ai/agent/stream
+Browser network status: 200
+Fetch response type: cors
+Time to response + first SSE chunk: 527 ms
+Content-Type: text/event-stream; charset=utf-8
+X-HATCH-Trace-Id: req-1e
+First events: markets active, orders active
+Console CORS errors: none
+```
+
+The UI rendered the streamed answer instead of `Failed to fetch`. This proves
+the response now passes the browser's CORS enforcement and reaches
+`streamAgent()`/`Agent.tsx`.
 

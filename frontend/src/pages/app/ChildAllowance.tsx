@@ -71,7 +71,7 @@ export default function ChildAllowance() {
   const notional = Number(policy?.amountUsd || 0);
 
   const discovery = useQuery({
-    queryKey: ["market-discovery", notional, live.network],
+    queryKey: ["eligible-markets", notional, live.network],
     queryFn: () =>
       api.get<any>(`/api/sodex/markets/executable?notionalUsd=${encodeURIComponent(String(notional || 5))}`, {
         auth: false,
@@ -80,9 +80,11 @@ export default function ChildAllowance() {
     refetchInterval: 30_000,
   });
 
-  const available = discovery.data?.available || discovery.data?.report?.available || [];
+  // Never allow selecting a market that failed eligibility
+  const available = (discovery.data?.available || discovery.data?.report?.available || []).filter(
+    (m: any) => m.executable !== false && m.gatewayValidation !== "FAIL",
+  );
   const unavailable = discovery.data?.unavailable || discovery.data?.report?.unavailable || [];
-
   const verification = useQuery({
     queryKey: ["order-verification", lastOrderId],
     queryFn: () => api.get<any>(`/api/sodex/orders/${lastOrderId}/verification`),
@@ -266,19 +268,22 @@ export default function ChildAllowance() {
       />
 
       <SectionCard
-        title="Today's available markets"
-        subtitle="Live SoDEX discovery. Only executable markets can be selected."
+        title="Markets you can actually buy right now"
+        subtitle="Passed all 15 eligibility stages + dry validation. Live SoDEX only."
       >
         {discovery.isLoading ? (
-          <p className="text-sm text-white/45">Scanning every SoDEX market…</p>
+          <p className="text-sm text-white/45">Running eligibility scan on every SoDEX market…</p>
         ) : available.length === 0 ? (
           <p className="text-sm text-amber-100/80">
-            No executable markets for {fmtUsd(notional)} right now. See unavailable reasons below.
+            No eligible markets for {fmtUsd(notional)} right now. See unavailable reasons below.
           </p>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {available.map((m: any) => {
               const on = selectedSymbol === m.symbol;
+              const verified = m.lastVerified
+                ? new Date(m.lastVerified).toLocaleTimeString()
+                : "—";
               return (
                 <button
                   key={m.symbol}
@@ -306,28 +311,38 @@ export default function ChildAllowance() {
                       <Check className="h-4 w-4 text-emerald-300" />
                     ) : (
                       <span className="text-[10px] uppercase tracking-wide text-emerald-300/80">
-                        Available
+                        Eligible
                       </span>
                     )}
                   </div>
-                  <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 font-mono text-[11px] text-white/50">
-                    <span>Ask {m.bestAsk ?? "—"}</span>
+                  <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-white/55">
+                    <span>
+                      Trading Enabled{" "}
+                      <span className="text-emerald-300/90">{m.tradingEnabled !== false ? "YES" : "NO"}</span>
+                    </span>
+                    <span>
+                      Cancel Only{" "}
+                      <span className="text-white/80">{m.cancelOnly ? "YES" : "NO"}</span>
+                    </span>
+                    <span>
+                      Maintenance{" "}
+                      <span className="text-white/80">{m.maintenance ? "YES" : "NO"}</span>
+                    </span>
+                    <span>
+                      Gateway{" "}
+                      <span className="text-emerald-300/90">{m.gatewayValidation || "PASS"}</span>
+                    </span>
+                  </div>
+                  <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 font-mono text-[11px] text-white/45">
                     <span>Depth {fmtUsd(m.askDepthUsd)}</span>
                     <span>
                       Spread{" "}
                       {m.spreadPct != null ? `${(m.spreadPct * 100).toFixed(2)}%` : "—"}
                     </span>
-                    <span>Score {m.score}</span>
-                    <span>
-                      Fill ~{Math.round((m.estimatedFillProbability || 0) * 100)}%
-                    </span>
-                    <span>
-                      Slip ~{m.expectedSlippageBps != null ? `${m.expectedSlippageBps} bps` : "—"}
-                    </span>
+                    <span>Fill ~{Math.round((m.estimatedFillProbability || 0) * 100)}%</span>
+                    <span>Ask {m.bestAsk ?? "—"}</span>
                   </div>
-                  <p className="mt-2 text-[11px] text-white/35">
-                    Risk: live book · Est. match: IOC seconds
-                  </p>
+                  <p className="mt-2 text-[10px] text-white/30">Last verified {verified}</p>
                 </button>
               );
             })}
@@ -340,7 +355,7 @@ export default function ChildAllowance() {
               Unavailable today
             </h4>
             <div className="max-h-48 space-y-1.5 overflow-y-auto rounded-xl border border-white/[0.06] p-2">
-              {unavailable.slice(0, 24).map((m: any) => (
+              {unavailable.slice(0, 40).map((m: any) => (
                 <div
                   key={m.symbol}
                   className="flex items-center justify-between gap-3 rounded-lg px-2 py-1.5 text-xs text-white/45"

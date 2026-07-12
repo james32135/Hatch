@@ -1,30 +1,18 @@
 /**
- * Live SoDEX Market Discovery Engine.
- * Official sources only: markets/symbols, markets/tickers, markets/{sym}/orderbook.
- * No preferred symbols. No hardcoded MAG7/USSI/SSI selection.
+ * Live SoDEX market discovery — wraps Market Eligibility Engine.
+ * Only markets that pass ALL eligibility stages are selectable / submittable.
  */
 import type { HatchProfile } from "../config/environment.js";
 import { createSodexClient } from "../clients/sodex.js";
+import type { SpotSymbolMeta } from "./sodexSymbols.js";
+import { formatDecimal, formatPrice } from "./sodexSymbols.js";
 import {
-  formatDecimal,
-  formatPrice,
-  type SpotSymbolMeta,
-} from "./sodexSymbols.js";
-
-/** Exchange statuses that must never receive new risk-increasing orders. */
-const BLOCKED_STATUSES = new Set([
-  "CANCEL_ONLY",
-  "CANCELONLY",
-  "HALT",
-  "SUSPENDED",
-  "BREAK",
-  "DISABLED",
-  "INACTIVE",
-  "CLOSED",
-  "MAINTENANCE",
-  "POST_ONLY",
-  "POSTONLY",
-]);
+  evaluateMarketEligibility,
+  liveCapabilityProbe,
+  parseMetaRow,
+  unwrapSymbolList,
+  type MarketEligibility,
+} from "./marketEligibility.js";
 
 export type MarketSnapshot = {
   symbol: string;
@@ -62,10 +50,16 @@ export type MarketSnapshot = {
   executable: boolean;
   rejectReasons: string[];
   unavailableReason: string | null;
+  /** Eligibility engine fields */
+  tradingEnabled: boolean;
+  cancelOnly: boolean;
+  maintenance: boolean;
+  gatewayValidation: "PASS" | "FAIL";
+  lastVerified: string;
+  eligibility: MarketEligibility;
   meta: SpotSymbolMeta;
 };
 
-/** Full report returned for every investment discovery. */
 export type MarketExecutionReport = {
   scannedAt: string;
   profileId: string;
@@ -83,6 +77,10 @@ export type MarketExecutionReport = {
     score: number;
     askDepthUsd: number;
     bestAsk: number | null;
+    tradingEnabled: boolean;
+    cancelOnly: boolean;
+    maintenance: boolean;
+    gatewayValidation: "PASS" | "FAIL";
   }>;
   topExecutable: MarketSnapshot[];
 };
@@ -110,167 +108,79 @@ function asNum(v: unknown, fallback = 0): number {
   return Number.isFinite(n) ? n : fallback;
 }
 
-function unwrapList(data: unknown): Record<string, unknown>[] {
-  if (Array.isArray(data)) return data as Record<string, unknown>[];
-  if (data && typeof data === "object") {
-    const o = data as Record<string, unknown>;
-    for (const k of ["data", "symbols", "list", "result"]) {
-      if (Array.isArray(o[k])) return o[k] as Record<string, unknown>[];
-    }
-  }
-  return [];
-}
-
-function normalizeStatus(raw: string): string {
-  return String(raw || "UNKNOWN")
-    .toUpperCase()
-    .replace(/[-\s]/g, "_")
-    .replace(/_+/g, "_");
-}
-
-function humanReason(reasons: string[], status: string): string {
-  if (reasons.includes("cancel_only")) return "Cancel only";
-  if (reasons.includes("maintenance")) return "Maintenance";
-  if (reasons.includes("trading_disabled")) return "Trading disabled";
-  if (reasons.includes("empty_asks")) return "Empty orderbook (asks)";
-  if (reasons.includes("empty_bids")) return "Empty orderbook (bids)";
-  if (reasons.includes("ask_depth_below_minNotional")) return "Insufficient liquidity";
-  if (reasons.includes("abnormal_spread")) return "Spread too large";
-  if (reasons.includes("non_usdc_quote")) return "Unsupported quote";
-  if (reasons.includes("minNotional_impossible")) return "Min notional impossible";
-  if (status && status !== "TRADING") return `Status: ${status}`;
-  return reasons[0] || "Unavailable";
-}
-
-function parseMeta(row: Record<string, unknown>): SpotSymbolMeta | null {
-  const id = asNum(row.id ?? row.symbolID);
-  const name = String(row.name ?? row.symbol ?? "");
-  if (!id || !name) return null;
-  const pricePrecision = asNum(row.pricePrecision, 4);
-  const tickFromApi = asNum(row.tickSize);
+function eligibilityToSnapshot(
+  elig: MarketEligibility,
+  ticker: Record<string, unknown> | null,
+): MarketSnapshot | null {
+  if (!elig.meta) return null;
+  const meta = elig.meta;
+  const bids = elig.bestBid != null ? 1 : 0;
+  const asks = elig.bestAsk != null ? 1 : 0;
   return {
-    id,
-    name,
-    baseCoin: String(row.baseCoin ?? ""),
-    minNotional: asNum(row.minNotional, 5),
-    minQuantity: asNum(row.minQuantity ?? row.marketMinQuantity, 0.01),
-    stepSize: asNum(row.stepSize, 0.01),
-    quantityPrecision: asNum(row.quantityPrecision, 2),
-    pricePrecision,
-    tickSize: tickFromApi > 0 ? tickFromApi : Math.pow(10, -Math.max(0, pricePrecision)),
-    status: String(row.status ?? "UNKNOWN"),
+    symbol: elig.symbol,
+    marketId: elig.marketId,
+    base: elig.base,
+    quote: elig.quote,
+    status: elig.status,
+    lastPrice: elig.lastPrice,
+    midPrice: elig.midPrice,
+    bestBid: elig.bestBid,
+    bestAsk: elig.bestAsk,
+    spread:
+      elig.bestBid != null && elig.bestAsk != null
+        ? elig.bestAsk - elig.bestBid
+        : null,
+    spreadPct: elig.spreadPct,
+    bidDepthLevels: bids,
+    askDepthLevels: asks,
+    bidDepthQty: 0,
+    askDepthQty: 0,
+    askDepthUsd: elig.askDepthUsd,
+    bidDepthUsd: elig.bidDepthUsd,
+    volume24h: asNum(ticker?.volume ?? ticker?.baseVolume),
+    quoteVolume24h: asNum(ticker?.quoteVolume),
+    minNotional: meta.minNotional,
+    tickSize: meta.tickSize,
+    stepSize: meta.stepSize,
+    pricePrecision: meta.pricePrecision,
+    quantityPrecision: meta.quantityPrecision,
+    supportsLimit: true,
+    supportsIoc: true,
+    supportsMarket: false,
+    liquidityScore: elig.score,
+    executionScore: elig.score,
+    score: elig.score,
+    expectedSlippageBps: elig.expectedSlippageBps,
+    estimatedFillProbability: elig.estimatedFillProbability,
+    executable: elig.eligible,
+    rejectReasons: elig.stages.filter((s) => !s.pass).map((s) => s.id),
+    unavailableReason: elig.failReason,
+    tradingEnabled: elig.tradingEnabled,
+    cancelOnly: elig.cancelOnly,
+    maintenance: elig.maintenance,
+    gatewayValidation: elig.gatewayValidation,
+    lastVerified: elig.lastVerified,
+    eligibility: elig,
+    meta,
   };
 }
 
-function scoreMarket(
-  m: Omit<
-    MarketSnapshot,
-    | "score"
-    | "executable"
-    | "rejectReasons"
-    | "unavailableReason"
-    | "liquidityScore"
-    | "executionScore"
-    | "expectedSlippageBps"
-    | "estimatedFillProbability"
-  >,
-  notionalUsd: number,
-): Pick<
-  MarketSnapshot,
-  | "score"
-  | "executable"
-  | "rejectReasons"
-  | "unavailableReason"
-  | "liquidityScore"
-  | "executionScore"
-  | "expectedSlippageBps"
-  | "estimatedFillProbability"
-> {
-  const rejectReasons: string[] = [];
-  const st = normalizeStatus(m.status);
-
-  if (st === "CANCEL_ONLY" || st === "CANCELONLY") rejectReasons.push("cancel_only");
-  else if (st === "MAINTENANCE") rejectReasons.push("maintenance");
-  else if (BLOCKED_STATUSES.has(st) || (st && st !== "TRADING" && st !== "UNKNOWN" && st !== "")) {
-    rejectReasons.push("trading_disabled");
-  }
-
-  if (m.bestAsk == null || m.askDepthLevels === 0) rejectReasons.push("empty_asks");
-  if (m.bestBid == null || m.bidDepthLevels === 0) rejectReasons.push("empty_bids");
-  const depthNeed = Math.max(m.minNotional, notionalUsd > 0 ? notionalUsd : m.minNotional);
-  if (m.askDepthUsd + 1e-9 < depthNeed) {
-    rejectReasons.push("ask_depth_below_minNotional");
-  }
-  if (m.spreadPct != null && m.spreadPct > 0.25) rejectReasons.push("abnormal_spread");
-  if (!/_vUSDC$/i.test(m.symbol) && !m.quote.toUpperCase().includes("USDC")) {
-    rejectReasons.push("non_usdc_quote");
-  }
-  if (!(m.bestAsk != null && m.bestAsk > 0) && !rejectReasons.includes("empty_asks")) {
-    rejectReasons.push("minNotional_impossible");
-  }
-
-  let liquidityScore = 0;
-  if (m.bestAsk != null && m.askDepthLevels > 0) liquidityScore += 40;
-  if (m.bestBid != null && m.bidDepthLevels > 0) liquidityScore += 10;
-  liquidityScore += Math.min(30, m.askDepthUsd / 50);
-  liquidityScore += Math.min(15, m.quoteVolume24h / 500);
-  if (m.spreadPct != null) liquidityScore -= Math.min(25, m.spreadPct * 100);
-
-  const depthCover =
-    notionalUsd > 0 && m.askDepthUsd > 0
-      ? Math.min(1, m.askDepthUsd / notionalUsd)
-      : m.askDepthUsd > 0
-        ? 1
-        : 0;
-  let fillProb = 0;
-  if (rejectReasons.length === 0) {
-    fillProb = 0.35 + 0.55 * depthCover;
-    if (m.spreadPct != null && m.spreadPct < 0.01) fillProb += 0.08;
-    fillProb = Math.min(0.98, Math.max(0, fillProb));
-  }
-
-  const expectedSlippageBps =
-    m.bestAsk != null && m.askDepthUsd > 0
-      ? Math.min(
-          200,
-          Math.round(
-            (1 - Math.min(1, depthCover)) * 80 + (m.spreadPct ?? 0) * 10_000 * 0.5,
-          ),
-        )
-      : null;
-
-  const executionScore =
-    Math.round((liquidityScore * 0.7 + fillProb * 100 * 0.3) * 100) / 100;
-  const score = Math.round(executionScore * 100) / 100;
-
-  const executable = rejectReasons.length === 0 && score > 0 && m.bestAsk != null;
-  const unavailableReason = executable ? null : humanReason(rejectReasons, m.status);
-
-  return {
-    score,
-    liquidityScore: Math.round(liquidityScore * 100) / 100,
-    executionScore,
-    expectedSlippageBps,
-    estimatedFillProbability: Math.round(fillProb * 1000) / 1000,
-    executable,
-    rejectReasons,
-    unavailableReason,
-  };
-}
-
-/** Scan all SoDEX spot markets with live books + tickers. */
+/** Scan all SoDEX spot markets through the eligibility engine. */
 export async function scanExecutableMarkets(
   profile: HatchProfile,
-  opts?: { notionalUsd?: number },
+  opts?: { notionalUsd?: number; maxSlippageBps?: number; accountID?: number },
 ): Promise<MarketSnapshot[]> {
   const notionalUsd = opts?.notionalUsd ?? 0;
+  const maxSlippageBps = opts?.maxSlippageBps ?? 50;
   const client = createSodexClient(profile);
   const [symRaw, tickRaw] = await Promise.all([
     client.marketsSymbols(),
     client.marketsTickers(),
   ]);
-  const symbols = unwrapList(symRaw).map(parseMeta).filter(Boolean) as SpotSymbolMeta[];
-  const tickers = unwrapList(tickRaw);
+  const symbols = unwrapSymbolList(symRaw)
+    .map(parseMetaRow)
+    .filter(Boolean) as SpotSymbolMeta[];
+  const tickers = unwrapSymbolList(tickRaw);
   const tickerBySym = new Map<string, Record<string, unknown>>();
   for (const t of tickers) {
     const name = String(t.symbol ?? t.name ?? "");
@@ -279,6 +189,8 @@ export async function scanExecutableMarkets(
 
   const out: MarketSnapshot[] = [];
   const chunk = 8;
+  const verifiedAt = new Date().toISOString();
+
   for (let i = 0; i < symbols.length; i += chunk) {
     const slice = symbols.slice(i, i + chunk);
     const books = await Promise.all(
@@ -289,76 +201,32 @@ export async function scanExecutableMarkets(
             raw && typeof raw === "object" && "data" in (raw as object)
               ? ((raw as { data: unknown }).data as Record<string, unknown>)
               : (raw as Record<string, unknown>);
-          return { meta, data, err: null as string | null };
+          return { meta, data, err: null as string | null, gateway: true };
         } catch (e) {
-          return { meta, data: null, err: String(e) };
+          return {
+            meta,
+            data: null as Record<string, unknown> | null,
+            err: String(e),
+            gateway: false,
+          };
         }
       }),
     );
-    for (const { meta, data, err } of books) {
-      const bids = Array.isArray(data?.bids) ? (data!.bids as [string, string][]) : [];
-      const asks = Array.isArray(data?.asks) ? (data!.asks as [string, string][]) : [];
-      const bestBid = bids[0] ? asNum(bids[0][0]) : null;
-      const bestAsk = asks[0] ? asNum(asks[0][0]) : null;
-      const bidDepthQty = bids.reduce((s, r) => s + asNum(r[1]), 0);
-      const askDepthQty = asks.reduce((s, r) => s + asNum(r[1]), 0);
-      const askDepthUsd = asks.reduce((s, r) => s + asNum(r[0]) * asNum(r[1]), 0);
-      const bidDepthUsd = bids.reduce((s, r) => s + asNum(r[0]) * asNum(r[1]), 0);
-      const spread =
-        bestBid != null && bestAsk != null && bestAsk > 0 ? bestAsk - bestBid : null;
-      const mid =
-        bestBid != null && bestAsk != null
-          ? (bestBid + bestAsk) / 2
-          : bestAsk ?? bestBid;
-      const spreadPct = spread != null && mid && mid > 0 ? spread / mid : null;
-      const t = tickerBySym.get(meta.name) || {};
-      const lastPrice = asNum(t.lastPx ?? t.lastPrice ?? t.close, 0) || null;
-      const baseFields = {
-        symbol: meta.name,
-        marketId: meta.id,
-        base: meta.baseCoin,
-        quote: String((t as { quoteCoin?: string }).quoteCoin ?? "vUSDC"),
-        status: meta.status,
-        lastPrice: lastPrice && lastPrice > 0 ? lastPrice : bestAsk ?? bestBid,
-        midPrice: mid && mid > 0 ? mid : null,
-        bestBid: bestBid && bestBid > 0 ? bestBid : null,
-        bestAsk: bestAsk && bestAsk > 0 ? bestAsk : null,
-        spread,
-        spreadPct,
-        bidDepthLevels: bids.length,
-        askDepthLevels: asks.length,
-        bidDepthQty,
-        askDepthQty,
-        askDepthUsd,
-        bidDepthUsd,
-        volume24h: asNum(t.volume ?? t.baseVolume),
-        quoteVolume24h: asNum(t.quoteVolume),
-        minNotional: meta.minNotional,
-        tickSize: meta.tickSize,
-        stepSize: meta.stepSize,
-        pricePrecision: meta.pricePrecision,
-        quantityPrecision: meta.quantityPrecision,
-        supportsLimit: true,
-        supportsIoc: true,
-        supportsMarket: false,
+
+    for (const { meta, data, err, gateway } of books) {
+      const elig = evaluateMarketEligibility({
         meta,
-      };
-      if (err) {
-        out.push({
-          ...baseFields,
-          score: 0,
-          liquidityScore: 0,
-          executionScore: 0,
-          expectedSlippageBps: null,
-          estimatedFillProbability: 0,
-          executable: false,
-          rejectReasons: [`orderbook_error:${err.slice(0, 80)}`],
-          unavailableReason: "Orderbook unavailable",
-        });
-        continue;
-      }
-      const scored = scoreMarket(baseFields, notionalUsd);
-      out.push({ ...baseFields, ...scored });
+        bookData: data,
+        bookError: err,
+        ticker: tickerBySym.get(meta.name) ?? null,
+        notionalUsd,
+        maxSlippageBps,
+        accountID: opts?.accountID,
+        gatewayReachable: gateway,
+        lastVerified: verifiedAt,
+      });
+      const snap = eligibilityToSnapshot(elig, tickerBySym.get(meta.name) ?? null);
+      if (snap) out.push(snap);
     }
   }
 
@@ -380,11 +248,15 @@ export function buildMarketExecutionReport(input: {
       marketId: m.marketId,
       base: m.base,
       status: m.status,
-      reason: m.unavailableReason || humanReason(m.rejectReasons, m.status),
+      reason: m.unavailableReason || "Unavailable",
       rejectReasons: m.rejectReasons,
       score: m.score,
       askDepthUsd: m.askDepthUsd,
       bestAsk: m.bestAsk,
+      tradingEnabled: m.tradingEnabled,
+      cancelOnly: m.cancelOnly,
+      maintenance: m.maintenance,
+      gatewayValidation: m.gatewayValidation,
     }));
 
   return {
@@ -411,8 +283,7 @@ function sizeOrder(
   }
   const slip = Math.max(0, maxSlippageBps) / 10_000;
   const ref = market.bestAsk;
-  const limitPx = ref * (1 + slip);
-  const price = formatPrice(limitPx, market.meta);
+  const price = formatPrice(ref * (1 + slip), market.meta);
   const step = market.stepSize > 0 ? market.stepSize : 0.01;
   const rawQty = Math.max(notionalUsd / ref, market.minNotional / ref);
   const stepped = Math.ceil(rawQty / step - 1e-12) * step;
@@ -421,9 +292,8 @@ function sizeOrder(
 }
 
 /**
- * Build an execution route from live discovery.
- * - If chosenSymbol / chosenMarketId provided: must be currently executable.
- * - Else: highest executionScore (no preferred-symbol bias).
+ * Route only from eligibility-passed markets.
+ * chosenSymbol must pass live eligibility (re-probed).
  */
 export function selectExecutionRoute(input: {
   notionalUsd: number;
@@ -472,43 +342,42 @@ export function selectExecutionRoute(input: {
       throw Object.assign(
         new Error(
           raw
-            ? `${raw.symbol} is not executable right now: ${raw.unavailableReason || raw.rejectReasons.join(", ")}`
+            ? `${raw.symbol} failed eligibility: ${raw.unavailableReason || raw.rejectReasons.join(", ")}`
             : `Chosen market not found in live SoDEX scan`,
         ),
         {
           code: "market_not_executable",
-          details: {
-            considered,
-            reportSummary: { available: report.available.length },
-          },
+          details: { considered },
         },
       );
     }
-    why = `Parent selected ${chosen.symbol} from live discovery (score=${chosen.score}, askDepthUsd=${chosen.askDepthUsd.toFixed(2)}, fillProb=${chosen.estimatedFillProbability}, bestAsk=${chosen.bestAsk}).`;
+    if (chosen.gatewayValidation !== "PASS" || !chosen.executable) {
+      throw Object.assign(
+        new Error(`${chosen.symbol} gateway validation failed`),
+        { code: "market_not_executable" },
+      );
+    }
+    why = `Parent selected eligible ${chosen.symbol} (score=${chosen.score}, gateway=${chosen.gatewayValidation}, askDepthUsd=${chosen.askDepthUsd.toFixed(2)}, verified=${chosen.lastVerified}).`;
   } else {
     chosen = report.available[0];
     if (chosen) {
-      why = `Highest live execution score: ${chosen.symbol} (score=${chosen.score}, askDepthUsd=${chosen.askDepthUsd.toFixed(2)}, fillProb=${chosen.estimatedFillProbability}, bestAsk=${chosen.bestAsk}). No preferred-symbol bias.`;
+      why = `Highest eligible score: ${chosen.symbol} (score=${chosen.score}, gateway=${chosen.gatewayValidation}). No preferred-symbol bias.`;
     }
   }
 
-  if (!chosen || chosen.bestAsk == null) {
+  if (!chosen || chosen.bestAsk == null || !chosen.executable) {
     throw Object.assign(
       new Error(
-        `No executable SoDEX market for $${input.notionalUsd}. Scanned ${report.scanned}; available ${report.available.length}. Refusing empty / blocked books.`,
+        `No eligible SoDEX market for $${input.notionalUsd}. Scanned ${report.scanned}; available ${report.available.length}.`,
       ),
       {
         code: "no_executable_liquidity",
-        details: {
-          considered,
-          unavailable: report.unavailable.slice(0, 20),
-        },
+        details: { unavailable: report.unavailable.slice(0, 20) },
       },
     );
   }
 
   const sized = sizeOrder(chosen, input.notionalUsd, input.maxSlippageBps);
-
   return {
     market: chosen,
     notionalUsd: input.notionalUsd,
@@ -523,40 +392,42 @@ export function selectExecutionRoute(input: {
   };
 }
 
-/** Re-check a single market is still executable immediately before relay. */
+/** Re-probe eligibility immediately before relay. */
 export async function assertMarketStillExecutable(input: {
   profile: HatchProfile;
   symbol: string;
   notionalUsd: number;
 }): Promise<MarketSnapshot> {
-  const markets = await scanExecutableMarkets(input.profile, {
+  const elig = await liveCapabilityProbe({
+    profile: input.profile,
+    symbol: input.symbol,
     notionalUsd: input.notionalUsd,
   });
-  const hit = markets.find(
-    (m) => m.symbol.toUpperCase() === input.symbol.toUpperCase(),
-  );
-  if (!hit || !hit.executable || hit.bestAsk == null) {
+  if (!elig.eligible || elig.gatewayValidation !== "PASS" || elig.bestAsk == null) {
     throw Object.assign(
       new Error(
-        hit
-          ? `${input.symbol} no longer executable: ${hit.unavailableReason || hit.rejectReasons.join(", ")}`
-          : `${input.symbol} missing from live scan`,
+        `${input.symbol} no longer eligible: ${elig.failReason || "failed stages"}`,
       ),
       { code: "market_not_executable" },
     );
   }
-  if (input.notionalUsd + 1e-9 < hit.minNotional) {
+  if (input.notionalUsd + 1e-9 < (elig.meta?.minNotional ?? 5)) {
     throw Object.assign(
       new Error(
-        `Notional below minNotional ${hit.minNotional} for ${hit.symbol}`,
+        `Notional below minNotional ${elig.meta?.minNotional} for ${elig.symbol}`,
       ),
       { code: "notional_too_small" },
     );
   }
-  return hit;
+  const snap = eligibilityToSnapshot(elig, null);
+  if (!snap) {
+    throw Object.assign(new Error(`${input.symbol} missing meta`), {
+      code: "market_not_executable",
+    });
+  }
+  return snap;
 }
 
-/** @deprecated No preferred markets — always returns []. */
 export type RiskTier = "CONSERVATIVE" | "BALANCED" | "GROWTH";
 export function preferredSymbolOrder(_tier: RiskTier): RegExp[] {
   return [];

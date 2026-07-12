@@ -5,25 +5,34 @@ import { StatusPip } from "@/components/common/StatusPip";
 import { AdvancedDetails } from "@/components/common/AdvancedDetails";
 import { Button } from "@/components/ui/button";
 import { ExternalLink } from "lucide-react";
-import { friendlyMarket, friendlyReadiness } from "@/lib/copy";
+import { friendlyReadiness } from "@/lib/copy";
+import { fmtUsd } from "@/lib/format";
 
 export default function Sodex() {
-  const meta = useQuery({ queryKey: ["sodex-meta"], queryFn: () => api.get<any>("/api/sodex/meta", { auth: false }) });
-  const readiness = useQuery({ queryKey: ["sodex-readiness"], queryFn: () => api.get<any>("/api/sodex/readiness") });
-  const symbols = useQuery({ queryKey: ["sodex-symbols"], queryFn: () => api.get<any>("/api/sodex/markets/symbols", { auth: false }) });
-  const rows = symbols.data?.data?.data || [];
+  const meta = useQuery({
+    queryKey: ["sodex-meta"],
+    queryFn: () => api.get<any>("/api/sodex/meta", { auth: false }),
+  });
+  const readiness = useQuery({
+    queryKey: ["sodex-readiness"],
+    queryFn: () => api.get<any>("/api/sodex/readiness"),
+  });
+  const discovery = useQuery({
+    queryKey: ["eligible-markets-trading", 5],
+    queryFn: () =>
+      api.get<any>("/api/sodex/markets/executable?notionalUsd=5", { auth: false }),
+    refetchInterval: 30_000,
+  });
   const ready = friendlyReadiness(readiness.data?.nextStep);
-
-  const focus = rows.filter(
-    (r: any) => [3, 26, 13].includes(r.id) || r.baseCoin?.includes("MAG7") || r.baseCoin?.includes("USSI"),
-  );
+  const available = discovery.data?.available || [];
+  const unavailable = discovery.data?.unavailable || [];
 
   return (
     <div className="space-y-5">
       <div>
         <h1 className="text-2xl font-medium tracking-tight">Trading</h1>
         <p className="mt-1 max-w-xl text-sm text-white/55">
-          Your wallet stays yours. HATCH prepares investments; you approve them.
+          Your wallet stays yours. Only markets that pass live eligibility appear here.
         </p>
       </div>
 
@@ -51,36 +60,62 @@ export default function Sodex() {
         </div>
       </SectionCard>
 
-      <SectionCard title="Available investments" subtitle="Markets used for weekly allowance investing.">
+      <SectionCard
+        title="Markets you can actually buy right now"
+        subtitle="Live eligibility — no hardcoded symbol list."
+      >
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="text-xs text-white/40">
               <tr>
-                <th className="pb-2 text-left font-normal">Investment</th>
-                <th className="pb-2 text-right font-normal">Status</th>
+                <th className="pb-2 text-left font-normal">Market</th>
+                <th className="pb-2 text-right font-normal">Trading</th>
+                <th className="pb-2 text-right font-normal">Gateway</th>
+                <th className="pb-2 text-right font-normal">Depth</th>
               </tr>
             </thead>
             <tbody>
-              {focus.map((r: any) => (
-                <tr key={r.id} className="border-t border-white/5">
+              {available.map((m: any) => (
+                <tr key={m.symbol} className="border-t border-white/5">
                   <td className="py-2.5">
-                    <div className="font-medium text-white/90">{friendlyMarket(r.baseCoin || r.name)}</div>
+                    <div className="font-medium text-white/90">{m.symbol}</div>
                   </td>
                   <td className="py-2.5 text-right">
-                    <StatusPip tone={r.status === "TRADING" ? "ok" : "warn"} label={r.status === "TRADING" ? "Open" : r.status} />
+                    <StatusPip
+                      tone={m.tradingEnabled ? "ok" : "danger"}
+                      label={m.tradingEnabled ? "YES" : "NO"}
+                    />
+                  </td>
+                  <td className="py-2.5 text-right">
+                    <StatusPip
+                      tone={m.gatewayValidation === "PASS" ? "ok" : "danger"}
+                      label={m.gatewayValidation || "—"}
+                    />
+                  </td>
+                  <td className="py-2.5 text-right font-mono text-white/60">
+                    {fmtUsd(m.askDepthUsd)}
                   </td>
                 </tr>
               ))}
-              {focus.length === 0 && (
+              {!discovery.isLoading && available.length === 0 && (
                 <tr>
-                  <td colSpan={2} className="py-4 text-white/50">
-                    Markets loading…
+                  <td colSpan={4} className="py-4 text-white/50">
+                    No eligible markets right now.
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
+        {unavailable.length > 0 && (
+          <div className="mt-4 text-xs text-white/40">
+            Unavailable:{" "}
+            {unavailable
+              .slice(0, 8)
+              .map((m: any) => `${m.symbol} (${m.reason})`)
+              .join(" · ")}
+          </div>
+        )}
       </SectionCard>
     </div>
   );

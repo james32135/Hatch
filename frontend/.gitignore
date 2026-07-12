@@ -42,3 +42,6 @@ secrets/
 test-results/
 playwright-report/
 blob-report/
+
+# Vercel CLI local link
+.vercel

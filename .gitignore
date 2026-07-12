@@ -65,3 +65,5 @@ temp/
 # CI workflows require GitHub token workflow scope to push
 .github/
 
+# Vercel CLI local link
+.vercel

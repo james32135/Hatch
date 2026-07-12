@@ -91,7 +91,7 @@ function ChildViewHelper() {
   });
 
   return (
-    <SectionCard title="Open child view" subtitle="A read-only link. They can look and learn — not invest.">
+    <SectionCard title="Open child view" subtitle="A read-only link. They can look and learn, not invest.">
       {children.length === 0 ? (
         <p className="text-sm text-white/50">Add a child first.</p>
       ) : (

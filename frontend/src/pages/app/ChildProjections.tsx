@@ -62,7 +62,7 @@ export default function ChildProjections() {
         subtitle={`If you keep investing about ${fmtUsd(weekly)} every week…`}
       >
         <p className="text-sm leading-relaxed text-white/60">
-          These are teaching scenarios based on documented assumption bands — not promises, not live yields, and not
+          These are teaching scenarios based on documented assumption bands: not promises, not live yields, and not
           financial advice.
         </p>
         {assumptions.data && (

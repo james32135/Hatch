@@ -93,7 +93,7 @@ export default function Onboarding() {
             />
           </div>
           <div>
-            <Label>Age (5–17)</Label>
+            <Label>Age (5-17)</Label>
             <Input
               type="number"
               min={5}

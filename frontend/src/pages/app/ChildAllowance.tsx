@@ -135,7 +135,7 @@ export default function ChildAllowance() {
         <SectionCard title="Invest now" subtitle="Confirm in your wallet. You stay in control of every investment.">
           {notReady ? (
             <div className="rounded-xl border border-amber-400/25 bg-amber-400/[0.06] p-3 text-xs text-amber-100/90">
-              Almost ready — <StatusPip tone={ready.tone} label={ready.label} className="inline-flex" />. Finish setup under Trading, then come back.
+              Almost ready. <StatusPip tone={ready.tone} label={ready.label} className="inline-flex" /> Finish setup under Trading, then come back.
             </div>
           ) : (
             <ol className="space-y-2 text-sm text-white/70">

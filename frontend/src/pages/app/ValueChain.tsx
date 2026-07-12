@@ -101,7 +101,7 @@ export default function ValueChain() {
       <div className="flex items-start gap-3 rounded-2xl border border-emerald-400/20 bg-emerald-400/[0.06] p-4 text-sm text-emerald-50/90">
         <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0" strokeWidth={1.5} />
         <p>
-          Transparency without custody. Records exist so parents, auditors, and partners can verify what happened —
+          Transparency without custody. Records exist so parents, auditors, and partners can verify what happened,
           not so HATCH can move money without you.
         </p>
       </div>

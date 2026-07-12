@@ -50,7 +50,7 @@ export default function ChildPortfolio() {
       <SectionCard
         className="lg:col-span-2"
         title="Value"
-        subtitle={sodexError ? "Couldn't refresh live prices — showing the last known value" : undefined}
+        subtitle={sodexError ? "Couldn't refresh live prices. Showing the last known value." : undefined}
       >
         {p.isLoading ? (
           <div className="h-24 animate-pulse rounded-xl bg-white/5" />

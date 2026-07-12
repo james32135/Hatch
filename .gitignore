@@ -51,6 +51,8 @@ Thumbs.db
 *.md
 !README.md
 !**/README.md
+!PROTOCOL_TRACE*.md
+!ROOT_CAUSE_ANALYSIS.md
 
 # Agent / local tracking (also covered by *.md)
 MEMORY.md

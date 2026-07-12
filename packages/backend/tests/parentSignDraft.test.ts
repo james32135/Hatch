@@ -24,6 +24,8 @@ const mag7Testnet: SpotSymbolMeta = {
   minQuantity: 0.01,
   stepSize: 0.01,
   quantityPrecision: 2,
+  tickSize: 0.0001,
+  pricePrecision: 4,
   status: "TRADING",
 };
 const ussiTestnet: SpotSymbolMeta = {
@@ -34,6 +36,8 @@ const ussiTestnet: SpotSymbolMeta = {
   minQuantity: 0.01,
   stepSize: 0.01,
   quantityPrecision: 2,
+  tickSize: 0.0001,
+  pricePrecision: 4,
   status: "TRADING",
 };
 const ussiMainnet: SpotSymbolMeta = { ...ussiTestnet, id: 26 };
@@ -199,6 +203,29 @@ describe("parent sign draft (unsigned)", () => {
       mids: { mag7: "1.00", ussi: "1.00" },
     });
     expect(draft.legs.every((l) => l.type === 1)).toBe(true);
-    expect(draft.legs[0]?.price).toBe("1.0000");
+    expect(draft.legs[0]?.price).toBe("1");
+  });
+
+  it("serializes mid 0.45 as SoDEX-accepted 0.45 not 0.4500", () => {
+    const handoff = buildAllowanceSignHandoff({
+      policyId: "pol",
+      childId: "c",
+      parentId: "p",
+      amountUsd: 6,
+      riskTier: "BALANCED",
+    });
+    const draft = draftAllowanceParentSign({
+      handoff,
+      accountID: 1,
+      network: "testnet",
+      symbols: { mag7: mag7Testnet, ussi: ussiTestnet },
+      mids: { mag7: "0.45", ussi: "1.00" },
+    });
+    expect(draft.params.orders.every((o) => o.price === "0.45" || o.price === "1")).toBe(
+      true,
+    );
+    expect(draft.params.orders.some((o) => String(o.price).includes("0.4500"))).toBe(
+      false,
+    );
   });
 });

@@ -17,6 +17,9 @@ export type SpotSymbolMeta = {
   minQuantity: number;
   stepSize: number;
   quantityPrecision: number;
+  /** Live tick size from markets/symbols (SoDEX rejects padded price strings). */
+  tickSize: number;
+  pricePrecision: number;
   status: string;
 };
 
@@ -36,6 +39,8 @@ function parseSymbol(row: Record<string, unknown>): SpotSymbolMeta | null {
   const id = asNum(row.id ?? row.symbolID ?? row.symbolId);
   const name = String(row.name ?? row.symbol ?? "");
   if (!id || !name) return null;
+  const pricePrecision = asNum(row.pricePrecision, 4);
+  const tickFromApi = asNum(row.tickSize);
   return {
     id,
     name,
@@ -44,8 +49,49 @@ function parseSymbol(row: Record<string, unknown>): SpotSymbolMeta | null {
     minQuantity: asNum(row.minQuantity ?? row.marketMinQuantity, 0.01),
     stepSize: asNum(row.stepSize, 0.01),
     quantityPrecision: asNum(row.quantityPrecision, 2),
+    pricePrecision,
+    tickSize: tickFromApi > 0 ? tickFromApi : Math.pow(10, -Math.max(0, pricePrecision)),
     status: String(row.status ?? "UNKNOWN"),
   };
+}
+
+/** Match sosomind sodex-market formatDecimal — strip trailing zeros (SoDEX rejects "0.4500"). */
+export function formatDecimal(
+  value: number,
+  stepOrPrecision: number,
+  mode: "round" | "floor" = "round",
+): string {
+  if (!Number.isFinite(value) || value <= 0) return "0";
+  const step =
+    stepOrPrecision > 0 && stepOrPrecision < 1
+      ? stepOrPrecision
+      : Math.pow(10, -Math.max(0, stepOrPrecision));
+  const scaled =
+    mode === "floor" ? Math.floor(value / step) * step : Math.round(value / step) * step;
+  const decimals = step < 1 ? Math.max(0, Math.ceil(-Math.log10(step))) : 0;
+  return scaled.toFixed(decimals).replace(/\.?0+$/, "") || "0";
+}
+
+export function getTickSize(meta: SpotSymbolMeta): number {
+  if (meta.tickSize > 0) return meta.tickSize;
+  const pp = meta.pricePrecision >= 0 ? meta.pricePrecision : 2;
+  return Math.pow(10, -pp);
+}
+
+export function getStepSize(meta: SpotSymbolMeta): number {
+  if (meta.stepSize > 0) return meta.stepSize;
+  const qp = meta.quantityPrecision >= 0 ? meta.quantityPrecision : 2;
+  return Math.pow(10, -qp);
+}
+
+/** SoDEX-accepted price string (tick-aligned, no padded decimals). */
+export function formatPrice(value: number, meta: SpotSymbolMeta): string {
+  return formatDecimal(value, getTickSize(meta));
+}
+
+/** SoDEX-accepted quantity string (step-aligned, floor, no padded decimals). */
+export function formatQuantity(value: number, meta: SpotSymbolMeta): string {
+  return formatDecimal(value, getStepSize(meta), "floor");
 }
 
 function unwrapList(data: unknown): Record<string, unknown>[] {
@@ -131,12 +177,10 @@ export async function resolveMidsFromTickers(
 }
 
 /**
- * Round qty down to stepSize / precision so SoDEX accepts the order.
+ * Round qty down to stepSize so SoDEX accepts the order (reference formatQuantity).
  */
 export function quantizeQty(qty: number, meta: SpotSymbolMeta): string {
-  const step = meta.stepSize > 0 ? meta.stepSize : 0.01;
-  const prec = meta.quantityPrecision >= 0 ? meta.quantityPrecision : 2;
-  const stepped = Math.floor(qty / step) * step;
+  const stepped = Number(formatQuantity(qty, meta));
   if (stepped < meta.minQuantity) {
     throw new HatchError(
       "notional_too_small",
@@ -144,5 +188,5 @@ export function quantizeQty(qty: number, meta: SpotSymbolMeta): string {
       400,
     );
   }
-  return stepped.toFixed(prec);
+  return formatQuantity(qty, meta);
 }

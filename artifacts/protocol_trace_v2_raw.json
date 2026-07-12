@@ -1,0 +1,1588 @@
+{
+  "generatedAt": "2026-07-12T19:32:24.314Z",
+  "wallet": "0xf76e6b0920e9332ff4410f6dd53f01722abc71a3",
+  "accountID": 54647,
+  "chainId": 138565,
+  "gateway": "https://testnet-gw.sodex.dev/api/v1/spot",
+  "steps": [
+    {
+      "n": 0,
+      "name": "trace_meta_v2",
+      "timestamp": "2026-07-12T19:32:09.714Z",
+      "status": "info",
+      "note": "wallet=0xf76e6b0920e9332ff4410f6dd53f01722abc71a3 accountID=54647 priceFormat=formatPrice(stripZeros)"
+    },
+    {
+      "n": 11,
+      "name": "balances_BEFORE",
+      "timestamp": "2026-07-12T19:32:11.207Z",
+      "latencyMs": 306,
+      "status": "ok",
+      "http": {
+        "method": "GET",
+        "url": "https://testnet-gw.sodex.dev/api/v1/spot/accounts/0xf76e6b0920e9332ff4410f6dd53f01722abc71a3/balances"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "code": 0,
+          "timestamp": 1783884730165,
+          "data": {
+            "blockTime": 1783884730061,
+            "blockHeight": 185354544,
+            "balances": [
+              {
+                "id": 0,
+                "coin": "vUSDC",
+                "total": "1223.48378",
+                "locked": "0"
+              },
+              {
+                "id": 2,
+                "coin": "vETH",
+                "total": "0.019087585",
+                "locked": "0"
+              },
+              {
+                "id": 4,
+                "coin": "WSOSO",
+                "total": "38.401364",
+                "locked": "0"
+              },
+              {
+                "id": 6,
+                "coin": "vSOL",
+                "total": "0.0359766",
+                "locked": "0"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "n": 13,
+      "name": "account_state_BEFORE",
+      "timestamp": "2026-07-12T19:32:11.524Z",
+      "latencyMs": 316,
+      "status": "ok",
+      "http": {
+        "method": "GET",
+        "url": "https://testnet-gw.sodex.dev/api/v1/spot/accounts/0xf76e6b0920e9332ff4410f6dd53f01722abc71a3/state"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "code": 0,
+          "timestamp": 1783884730470,
+          "data": {
+            "user": "0xf76e6b0920e9332ff4410f6dd53f01722abc71a3",
+            "aid": 54647,
+            "uid": 54647,
+            "B": [
+              {
+                "i": 4,
+                "a": "WSOSO",
+                "t": "38.401364",
+                "l": "0"
+              },
+              {
+                "i": 6,
+                "a": "vSOL",
+                "t": "0.0359766",
+                "l": "0"
+              },
+              {
+                "i": 0,
+                "a": "vUSDC",
+                "t": "1223.48378",
+                "l": "0"
+              },
+              {
+                "i": 2,
+                "a": "vETH",
+                "t": "0.019087585",
+                "l": "0"
+              }
+            ],
+            "O": null,
+            "TO": null
+          }
+        }
+      }
+    },
+    {
+      "n": 15,
+      "name": "orderbook_BEFORE_MAG7",
+      "timestamp": "2026-07-12T19:32:11.822Z",
+      "latencyMs": 298,
+      "status": "ok",
+      "http": {
+        "method": "GET",
+        "url": "https://testnet-gw.sodex.dev/api/v1/spot/markets/vMAG7ssi_vUSDC/orderbook?limit=20"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "code": 0,
+          "timestamp": 1783884730786,
+          "data": {
+            "blockTime": 1783884730720,
+            "blockHeight": 185354550,
+            "updateID": 884419582,
+            "bids": [
+              [
+                "0.45",
+                "2216.03"
+              ],
+              [
+                "0.4057",
+                "334.81"
+              ]
+            ],
+            "asks": []
+          }
+        }
+      }
+    },
+    {
+      "n": "A_MAG7.liquidity",
+      "name": "liquidity_vMAG7ssi_vUSDC",
+      "timestamp": "2026-07-12T19:32:12.129Z",
+      "status": "info",
+      "response": {
+        "json": {
+          "bestBid": [
+            "0.45",
+            "2216.03"
+          ],
+          "bestAsk": null,
+          "bidDepthLevels": 2,
+          "askDepthLevels": 0,
+          "spread": null,
+          "minNotional": 5,
+          "tickSize": 0.0001,
+          "pricePrecision": 4,
+          "quantityPrecision": 2,
+          "stepSize": 0.01,
+          "orderType": "LIMIT=1",
+          "timeInForce": "IOC=3",
+          "useSlip005": false
+        }
+      }
+    },
+    {
+      "n": "A_MAG7.1",
+      "name": "unsigned_payload",
+      "timestamp": "2026-07-12T19:32:12.130Z",
+      "status": "info",
+      "http": {
+        "method": "N/A",
+        "url": "local EIP-712",
+        "body": {
+          "envelope": {
+            "type": "batchNewOrder",
+            "params": {
+              "accountID": 54647,
+              "orders": [
+                {
+                  "symbolID": 3,
+                  "clOrdID": "hv2A_MAG7mri6wsma",
+                  "side": 1,
+                  "type": 1,
+                  "timeInForce": 3,
+                  "price": "0.45",
+                  "quantity": "13.34"
+                }
+              ]
+            }
+          },
+          "payloadHash": "0x443d6976e7f17a50801e81a3677835bccc93acd498cc18911f13c9804fd3da22",
+          "nonce": "1783884732130",
+          "domain": {
+            "name": "spot",
+            "version": "1",
+            "chainId": 138565,
+            "verifyingContract": "0x0000000000000000000000000000000000000000"
+          }
+        }
+      }
+    },
+    {
+      "n": "A_MAG7.2",
+      "name": "typed_data",
+      "timestamp": "2026-07-12T19:32:12.148Z",
+      "status": "info",
+      "response": {
+        "json": {
+          "domain": {
+            "name": "spot",
+            "version": "1",
+            "chainId": 138565,
+            "verifyingContract": "0x0000000000000000000000000000000000000000"
+          },
+          "types": {
+            "ExchangeAction": [
+              {
+                "name": "payloadHash",
+                "type": "bytes32"
+              },
+              {
+                "name": "nonce",
+                "type": "uint64"
+              }
+            ]
+          },
+          "primaryType": "ExchangeAction",
+          "message": {
+            "payloadHash": "0x443d6976e7f17a50801e81a3677835bccc93acd498cc18911f13c9804fd3da22",
+            "nonce": "1783884732130"
+          }
+        }
+      }
+    },
+    {
+      "n": "A_MAG7.3",
+      "name": "signature",
+      "timestamp": "2026-07-12T19:32:12.151Z",
+      "latencyMs": 3,
+      "status": "ok",
+      "response": {
+        "json": {
+          "rawSig": "0x47c56402b511d10dffdbf89c53350e29d2ad4e012a9990a1678389d777eaefaf31eea27c5edc87685f4f98f604acc7b88146c24df166bce3f18dc4dc95d8ea021b",
+          "apiSign": "0x0147c56402b511d10dffdbf89c53350e29d2ad4e012a9990a1678389d777eaefaf31eea27c5edc87685f4f98f604acc7b88146c24df166bce3f18dc4dc95d8ea0200",
+          "signer": "0xf76e6B0920e9332fF4410f6dD53F01722AbC71a3"
+        }
+      }
+    },
+    {
+      "n": "A_MAG7.4",
+      "name": "relay_request",
+      "timestamp": "2026-07-12T19:32:12.151Z",
+      "status": "info",
+      "http": {
+        "method": "POST",
+        "url": "https://testnet-gw.sodex.dev/api/v1/spot/trade/orders/batch",
+        "headers": {
+          "accept": "application/json",
+          "content-type": "application/json",
+          "X-API-Sign": "0x0147c56402b511d1…",
+          "X-API-Nonce": "1783884732130"
+        },
+        "body": {
+          "accountID": 54647,
+          "orders": [
+            {
+              "symbolID": 3,
+              "clOrdID": "hv2A_MAG7mri6wsma",
+              "side": 1,
+              "type": 1,
+              "timeInForce": 3,
+              "price": "0.45",
+              "quantity": "13.34"
+            }
+          ]
+        }
+      },
+      "note": "HATCH relay headers (no X-API-Chain) — proven non-causal for accepts"
+    },
+    {
+      "n": "A_MAG7.5",
+      "name": "relay_response",
+      "timestamp": "2026-07-12T19:32:12.482Z",
+      "latencyMs": 331,
+      "status": "ok",
+      "response": {
+        "status": 200,
+        "headers": {
+          "cf-cache-status": "DYNAMIC",
+          "cf-ray": "a1a278f29cc797b3-MRS",
+          "connection": "keep-alive",
+          "content-encoding": "gzip",
+          "content-type": "application/json; charset=utf-8",
+          "date": "Sun, 12 Jul 2026 19:32:11 GMT",
+          "server": "cloudflare",
+          "set-cookie": "__cf_bm=nZRBSVWcSEh5Gxcs1DmPs3eqg84fgbEFgJX.NPYt1.o-1783884731.2988725-1.0.1.1-lmXKWu0MriXoqAhKyOAU4q8zHVmVOhrbxF4B0gitHLFhkLB35nVz9SlFhGj_Y_SpCwH36cgMPCcl56YPdcv_4rXJ9AvBGb.JMRBP20cqGlJSSXi1Pxl7Ex4mQ7AEpp6E; HttpOnly; SameSite=None; Secure; Path=/; Domain=sodex.dev; Expires=Sun, 12 Jul 2026 20:02:11 GMT",
+          "strict-transport-security": "max-age=31536000; includeSubDomains",
+          "transfer-encoding": "chunked",
+          "x-ratelimit-limit": "6000",
+          "x-ratelimit-remaining": "5864",
+          "x-ratelimit-reset": "1783884780"
+        },
+        "json": {
+          "code": 0,
+          "timestamp": 1783884731421,
+          "data": [
+            {
+              "code": 0,
+              "clOrdID": "hv2A_MAG7mri6wsma",
+              "orderID": 1274981537
+            }
+          ]
+        },
+        "text": "{\"code\":0,\"timestamp\":1783884731421,\"data\":[{\"code\":0,\"clOrdID\":\"hv2A_MAG7mri6wsma\",\"orderID\":1274981537}]}"
+      },
+      "stop": false
+    },
+    {
+      "n": "A_MAG7.6",
+      "name": "exchange_response",
+      "timestamp": "2026-07-12T19:32:12.482Z",
+      "status": "ok",
+      "response": {
+        "json": {
+          "code": 0,
+          "timestamp": 1783884731421,
+          "data": [
+            {
+              "code": 0,
+              "clOrdID": "hv2A_MAG7mri6wsma",
+              "orderID": 1274981537
+            }
+          ]
+        }
+      },
+      "stop": false
+    },
+    {
+      "n": "A_MAG7.7",
+      "name": "order_id",
+      "timestamp": "2026-07-12T19:32:12.482Z",
+      "status": "ok",
+      "response": {
+        "json": {
+          "orderID": 1274981537,
+          "leg": {
+            "code": 0,
+            "clOrdID": "hv2A_MAG7mri6wsma",
+            "orderID": 1274981537
+          }
+        }
+      },
+      "stop": false
+    },
+    {
+      "n": "A_MAG7.8",
+      "name": "client_order_id",
+      "timestamp": "2026-07-12T19:32:12.482Z",
+      "status": "ok",
+      "response": {
+        "json": {
+          "clOrdID": "hv2A_MAG7mri6wsma",
+          "sent": "hv2A_MAG7mri6wsma"
+        }
+      }
+    },
+    {
+      "n": "A_MAG7.9.poll0",
+      "name": "orders_history_poll",
+      "timestamp": "2026-07-12T19:32:13.057Z",
+      "latencyMs": 575,
+      "status": "info",
+      "http": {
+        "method": "GET",
+        "url": "https://testnet-gw.sodex.dev/api/v1/spot/accounts/0xf76e6b0920e9332ff4410f6dd53f01722abc71a3/orders/history?limit=50"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "matched": false,
+          "recent3": [
+            {
+              "symbol": "vMAG7ssi_vUSDC",
+              "orderID": 1274980851,
+              "clOrdID": "d2mri6pxzpva",
+              "side": "BUY",
+              "type": "LIMIT",
+              "timeInForce": "IOC",
+              "price": "0.45",
+              "origQty": "13.34",
+              "status": "CANCELED",
+              "executedQty": "0",
+              "executedValue": "0",
+              "marginFrozen": "0",
+              "createdAt": 1783884411778,
+              "updatedAt": 1783884411778
+            },
+            {
+              "symbol": "vMAG7ssi_vUSDC",
+              "orderID": 1274980787,
+              "clOrdID": "diagmri6pa6mdmt",
+              "side": "BUY",
+              "type": "LIMIT",
+              "timeInForce": "IOC",
+              "price": "0.45",
+              "origQty": "13.34",
+              "status": "CANCELED",
+              "executedQty": "0",
+              "executedValue": "0",
+              "marginFrozen": "0",
+              "createdAt": 1783884380995,
+              "updatedAt": 1783884380995
+            },
+            {
+              "symbol": "vMAG7ssi_vUSDC",
+              "orderID": 1274980786,
+              "clOrdID": "diagmri6p9y8gsq",
+              "side": "BUY",
+              "type": "LIMIT",
+              "timeInForce": "IOC",
+              "price": "0.4523",
+              "origQty": "13.34",
+              "status": "CANCELED",
+              "executedQty": "0",
+              "executedValue": "0",
+              "marginFrozen": "0",
+              "createdAt": 1783884380645,
+              "updatedAt": 1783884380645
+            }
+          ]
+        }
+      },
+      "note": "not in history yet"
+    },
+    {
+      "n": "A_MAG7.9.poll1",
+      "name": "orders_history_poll",
+      "timestamp": "2026-07-12T19:32:15.622Z",
+      "latencyMs": 551,
+      "status": "ok",
+      "http": {
+        "method": "GET",
+        "url": "https://testnet-gw.sodex.dev/api/v1/spot/accounts/0xf76e6b0920e9332ff4410f6dd53f01722abc71a3/orders/history?limit=50"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "symbol": "vMAG7ssi_vUSDC",
+          "orderID": 1274981537,
+          "clOrdID": "hv2A_MAG7mri6wsma",
+          "side": "BUY",
+          "type": "LIMIT",
+          "timeInForce": "IOC",
+          "price": "0.45",
+          "origQty": "13.34",
+          "status": "CANCELED",
+          "executedQty": "0",
+          "executedValue": "0",
+          "marginFrozen": "0",
+          "createdAt": 1783884731513,
+          "updatedAt": 1783884731513
+        }
+      },
+      "note": "status=CANCELED executedQty=0 remainingQty=undefined"
+    },
+    {
+      "n": "A_MAG7.10",
+      "name": "trades",
+      "timestamp": "2026-07-12T19:32:16.224Z",
+      "latencyMs": 602,
+      "status": "ok",
+      "http": {
+        "method": "GET",
+        "url": "https://testnet-gw.sodex.dev/api/v1/spot/accounts/0xf76e6b0920e9332ff4410f6dd53f01722abc71a3/trades?orderID=1274981537&limit=50"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "tradesForOrder": [],
+          "rawLen": 8,
+          "rawSample": [
+            {
+              "symbol": "WSOSO_vUSDC",
+              "tradeID": 1742756,
+              "orderID": 1274639473,
+              "clOrdID": "hl-x178373594973318",
+              "side": "BUY",
+              "price": "0.45",
+              "quantity": "4.44",
+              "fee": "0.002886",
+              "feeCoin": "WSOSO",
+              "time": 1783735949182,
+              "isMaker": false
+            },
+            {
+              "symbol": "WSOSO_vUSDC",
+              "tradeID": 1742755,
+              "orderID": 1274639472,
+              "clOrdID": "hl-x178373594911511",
+              "side": "BUY",
+              "price": "0.45",
+              "quantity": "5",
+              "fee": "0.00325",
+              "feeCoin": "WSOSO",
+              "time": 1783735948692,
+              "isMaker": false
+            },
+            {
+              "symbol": "WSOSO_vUSDC",
+              "tradeID": 1742754,
+              "orderID": 1274639433,
+              "clOrdID": "hatchgasmrfqbihz",
+              "side": "BUY",
+              "price": "0.45",
+              "quantity": "25",
+              "fee": "0.01625",
+              "feeCoin": "WSOSO",
+              "time": 1783735932448,
+              "isMaker": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "n": "A_MAG7.terminal_nonfill",
+      "name": "terminal_nonfill_details",
+      "timestamp": "2026-07-12T19:32:16.224Z",
+      "status": "info",
+      "response": {
+        "json": {
+          "status": "CANCELED",
+          "remainingQty": null,
+          "executedQty": "0",
+          "avgPrice": "0.45",
+          "reason": null,
+          "tradeIds": [],
+          "asksEmpty": true,
+          "iocCannotFillWithoutAsks": "BUY IOC requires resting asks to match against; empty ask book → cancel/expire with executedQty=0"
+        }
+      }
+    },
+    {
+      "n": 16,
+      "name": "orderbook_AFTER_MAG7",
+      "timestamp": "2026-07-12T19:32:16.531Z",
+      "latencyMs": 307,
+      "status": "ok",
+      "response": {
+        "status": 200,
+        "json": {
+          "code": 0,
+          "timestamp": 1783884735485,
+          "data": {
+            "blockTime": 1783884735393,
+            "blockHeight": 185354596,
+            "updateID": 884419582,
+            "bids": [
+              [
+                "0.45",
+                "2216.03"
+              ],
+              [
+                "0.4057",
+                "334.81"
+              ]
+            ],
+            "asks": []
+          }
+        }
+      }
+    },
+    {
+      "n": "A.continue",
+      "name": "MAG7_nonfill_continue",
+      "timestamp": "2026-07-12T19:32:16.531Z",
+      "status": "info",
+      "note": "MAG7 asks empty → BUY IOC cannot match. GTC would rest on bid side without filling until a seller appears. Continuing on liquid WSOSO to prove FILLED path with identical signing/relay."
+    },
+    {
+      "n": "B.15",
+      "name": "orderbook_BEFORE_WSOSO",
+      "timestamp": "2026-07-12T19:32:16.840Z",
+      "latencyMs": 309,
+      "status": "ok",
+      "response": {
+        "status": 200,
+        "json": {
+          "code": 0,
+          "timestamp": 1783884735793,
+          "data": {
+            "blockTime": 1783884735676,
+            "blockHeight": 185354599,
+            "updateID": 891860946,
+            "bids": [
+              [
+                "0.3",
+                "6148.56"
+              ],
+              [
+                "0.2999",
+                "68905.02"
+              ],
+              [
+                "0.2998",
+                "59700.78"
+              ],
+              [
+                "0.2997",
+                "59047.14"
+              ],
+              [
+                "0.2996",
+                "55123.33"
+              ],
+              [
+                "0.2995",
+                "50004.87"
+              ],
+              [
+                "0.2993",
+                "44777.45"
+              ],
+              [
+                "0.2992",
+                "41786.35"
+              ],
+              [
+                "0.299",
+                "77009.82"
+              ],
+              [
+                "0.2988",
+                "33250.75"
+              ],
+              [
+                "0.2987",
+                "32230.79"
+              ],
+              [
+                "0.2985",
+                "58880.51"
+              ],
+              [
+                "0.2983",
+                "25428.7"
+              ],
+              [
+                "0.2982",
+                "23232.21"
+              ],
+              [
+                "0.298",
+                "44321.53"
+              ],
+              [
+                "0.2978",
+                "18655.34"
+              ],
+              [
+                "0.2977",
+                "17115.13"
+              ],
+              [
+                "0.2975",
+                "31826.57"
+              ],
+              [
+                "0.2973",
+                "14164.48"
+              ],
+              [
+                "0.2972",
+                "13633.01"
+              ]
+            ],
+            "asks": [
+              [
+                "0.45",
+                "1384.97"
+              ],
+              [
+                "0.4565",
+                "289.25"
+              ],
+              [
+                "1",
+                "219.69"
+              ],
+              [
+                "4062",
+                "81.24"
+              ]
+            ]
+          }
+        }
+      }
+    },
+    {
+      "n": "B_WSOSO.liquidity",
+      "name": "liquidity_WSOSO_vUSDC",
+      "timestamp": "2026-07-12T19:32:16.840Z",
+      "status": "info",
+      "response": {
+        "json": {
+          "bestBid": [
+            "0.3",
+            "6148.56"
+          ],
+          "bestAsk": [
+            "0.45",
+            "1384.97"
+          ],
+          "bidDepthLevels": 20,
+          "askDepthLevels": 4,
+          "spread": 0.15000000000000002,
+          "minNotional": 1,
+          "tickSize": 0.0001,
+          "pricePrecision": 4,
+          "quantityPrecision": 2,
+          "stepSize": 0.01,
+          "orderType": "LIMIT=1",
+          "timeInForce": "IOC=3",
+          "useSlip005": true
+        }
+      }
+    },
+    {
+      "n": "B_WSOSO.1",
+      "name": "unsigned_payload",
+      "timestamp": "2026-07-12T19:32:16.840Z",
+      "status": "info",
+      "http": {
+        "method": "N/A",
+        "url": "local EIP-712",
+        "body": {
+          "envelope": {
+            "type": "batchNewOrder",
+            "params": {
+              "accountID": 54647,
+              "orders": [
+                {
+                  "symbolID": 4,
+                  "clOrdID": "hv2B_WSOSOmri6ww94",
+                  "side": 1,
+                  "type": 1,
+                  "timeInForce": 3,
+                  "price": "0.4523",
+                  "quantity": "13.34"
+                }
+              ]
+            }
+          },
+          "payloadHash": "0x75e87e35acaaf5ed2007c1926e1c08d041cce3b2aeb8de65d0dddc40c61d98b0",
+          "nonce": "1783884736840",
+          "domain": {
+            "name": "spot",
+            "version": "1",
+            "chainId": 138565,
+            "verifyingContract": "0x0000000000000000000000000000000000000000"
+          }
+        }
+      }
+    },
+    {
+      "n": "B_WSOSO.2",
+      "name": "typed_data",
+      "timestamp": "2026-07-12T19:32:16.840Z",
+      "status": "info",
+      "response": {
+        "json": {
+          "domain": {
+            "name": "spot",
+            "version": "1",
+            "chainId": 138565,
+            "verifyingContract": "0x0000000000000000000000000000000000000000"
+          },
+          "types": {
+            "ExchangeAction": [
+              {
+                "name": "payloadHash",
+                "type": "bytes32"
+              },
+              {
+                "name": "nonce",
+                "type": "uint64"
+              }
+            ]
+          },
+          "primaryType": "ExchangeAction",
+          "message": {
+            "payloadHash": "0x75e87e35acaaf5ed2007c1926e1c08d041cce3b2aeb8de65d0dddc40c61d98b0",
+            "nonce": "1783884736840"
+          }
+        }
+      }
+    },
+    {
+      "n": "B_WSOSO.3",
+      "name": "signature",
+      "timestamp": "2026-07-12T19:32:16.841Z",
+      "latencyMs": 1,
+      "status": "ok",
+      "response": {
+        "json": {
+          "rawSig": "0x01dd7c1d063935903e679ced5bcce64e03e57d36f7ef698229f3da1ab09689a4335d01ee6ff85ade074d1dd6348b16f3c5dfdb9ae79ad3406f301dd1a2d76e3c1c",
+          "apiSign": "0x0101dd7c1d063935903e679ced5bcce64e03e57d36f7ef698229f3da1ab09689a4335d01ee6ff85ade074d1dd6348b16f3c5dfdb9ae79ad3406f301dd1a2d76e3c01",
+          "signer": "0xf76e6B0920e9332fF4410f6dD53F01722AbC71a3"
+        }
+      }
+    },
+    {
+      "n": "B_WSOSO.4",
+      "name": "relay_request",
+      "timestamp": "2026-07-12T19:32:16.841Z",
+      "status": "info",
+      "http": {
+        "method": "POST",
+        "url": "https://testnet-gw.sodex.dev/api/v1/spot/trade/orders/batch",
+        "headers": {
+          "accept": "application/json",
+          "content-type": "application/json",
+          "X-API-Sign": "0x0101dd7c1d063935…",
+          "X-API-Nonce": "1783884736840"
+        },
+        "body": {
+          "accountID": 54647,
+          "orders": [
+            {
+              "symbolID": 4,
+              "clOrdID": "hv2B_WSOSOmri6ww94",
+              "side": 1,
+              "type": 1,
+              "timeInForce": 3,
+              "price": "0.4523",
+              "quantity": "13.34"
+            }
+          ]
+        }
+      },
+      "note": "HATCH relay headers (no X-API-Chain) — proven non-causal for accepts"
+    },
+    {
+      "n": "B_WSOSO.5",
+      "name": "relay_response",
+      "timestamp": "2026-07-12T19:32:17.249Z",
+      "latencyMs": 408,
+      "status": "ok",
+      "response": {
+        "status": 200,
+        "headers": {
+          "cf-cache-status": "DYNAMIC",
+          "cf-ray": "a1a2790fed1f97b3-MRS",
+          "connection": "keep-alive",
+          "content-encoding": "gzip",
+          "content-type": "application/json; charset=utf-8",
+          "date": "Sun, 12 Jul 2026 19:32:16 GMT",
+          "server": "cloudflare",
+          "set-cookie": "__cf_bm=zMgQXKJi0r.1jastD4TbScSC81V7.juoHn_FruZ5EN8-1783884735.9888403-1.0.1.1-m_GfMTjXNips0qj_C8RpPrBDZLNSzjc4bsOGGVxBX8CHnn5dvkTca8qHrb53b98ZJ47OkjarwsH0BUREXsD8dXnFvT4ZMq5C4eB.HpkIIJJCuzP3o0Q2Qd3DlcZjq9kI; HttpOnly; SameSite=None; Secure; Path=/; Domain=sodex.dev; Expires=Sun, 12 Jul 2026 20:02:16 GMT",
+          "strict-transport-security": "max-age=31536000; includeSubDomains",
+          "transfer-encoding": "chunked",
+          "x-ratelimit-limit": "6000",
+          "x-ratelimit-remaining": "5755",
+          "x-ratelimit-reset": "1783884780"
+        },
+        "json": {
+          "code": 0,
+          "timestamp": 1783884736118,
+          "data": [
+            {
+              "code": 0,
+              "clOrdID": "hv2B_WSOSOmri6ww94",
+              "orderID": 1274981550
+            }
+          ]
+        },
+        "text": "{\"code\":0,\"timestamp\":1783884736118,\"data\":[{\"code\":0,\"clOrdID\":\"hv2B_WSOSOmri6ww94\",\"orderID\":1274981550}]}"
+      },
+      "stop": false
+    },
+    {
+      "n": "B_WSOSO.6",
+      "name": "exchange_response",
+      "timestamp": "2026-07-12T19:32:17.249Z",
+      "status": "ok",
+      "response": {
+        "json": {
+          "code": 0,
+          "timestamp": 1783884736118,
+          "data": [
+            {
+              "code": 0,
+              "clOrdID": "hv2B_WSOSOmri6ww94",
+              "orderID": 1274981550
+            }
+          ]
+        }
+      },
+      "stop": false
+    },
+    {
+      "n": "B_WSOSO.7",
+      "name": "order_id",
+      "timestamp": "2026-07-12T19:32:17.249Z",
+      "status": "ok",
+      "response": {
+        "json": {
+          "orderID": 1274981550,
+          "leg": {
+            "code": 0,
+            "clOrdID": "hv2B_WSOSOmri6ww94",
+            "orderID": 1274981550
+          }
+        }
+      },
+      "stop": false
+    },
+    {
+      "n": "B_WSOSO.8",
+      "name": "client_order_id",
+      "timestamp": "2026-07-12T19:32:17.249Z",
+      "status": "ok",
+      "response": {
+        "json": {
+          "clOrdID": "hv2B_WSOSOmri6ww94",
+          "sent": "hv2B_WSOSOmri6ww94"
+        }
+      }
+    },
+    {
+      "n": "B_WSOSO.9.poll0",
+      "name": "orders_history_poll",
+      "timestamp": "2026-07-12T19:32:17.765Z",
+      "latencyMs": 516,
+      "status": "info",
+      "http": {
+        "method": "GET",
+        "url": "https://testnet-gw.sodex.dev/api/v1/spot/accounts/0xf76e6b0920e9332ff4410f6dd53f01722abc71a3/orders/history?limit=50"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "matched": false,
+          "recent3": [
+            {
+              "symbol": "vMAG7ssi_vUSDC",
+              "orderID": 1274981537,
+              "clOrdID": "hv2A_MAG7mri6wsma",
+              "side": "BUY",
+              "type": "LIMIT",
+              "timeInForce": "IOC",
+              "price": "0.45",
+              "origQty": "13.34",
+              "status": "CANCELED",
+              "executedQty": "0",
+              "executedValue": "0",
+              "marginFrozen": "0",
+              "createdAt": 1783884731513,
+              "updatedAt": 1783884731513
+            },
+            {
+              "symbol": "vMAG7ssi_vUSDC",
+              "orderID": 1274980851,
+              "clOrdID": "d2mri6pxzpva",
+              "side": "BUY",
+              "type": "LIMIT",
+              "timeInForce": "IOC",
+              "price": "0.45",
+              "origQty": "13.34",
+              "status": "CANCELED",
+              "executedQty": "0",
+              "executedValue": "0",
+              "marginFrozen": "0",
+              "createdAt": 1783884411778,
+              "updatedAt": 1783884411778
+            },
+            {
+              "symbol": "vMAG7ssi_vUSDC",
+              "orderID": 1274980787,
+              "clOrdID": "diagmri6pa6mdmt",
+              "side": "BUY",
+              "type": "LIMIT",
+              "timeInForce": "IOC",
+              "price": "0.45",
+              "origQty": "13.34",
+              "status": "CANCELED",
+              "executedQty": "0",
+              "executedValue": "0",
+              "marginFrozen": "0",
+              "createdAt": 1783884380995,
+              "updatedAt": 1783884380995
+            }
+          ]
+        }
+      },
+      "note": "not in history yet"
+    },
+    {
+      "n": "B_WSOSO.9.poll1",
+      "name": "orders_history_poll",
+      "timestamp": "2026-07-12T19:32:20.272Z",
+      "latencyMs": 502,
+      "status": "info",
+      "http": {
+        "method": "GET",
+        "url": "https://testnet-gw.sodex.dev/api/v1/spot/accounts/0xf76e6b0920e9332ff4410f6dd53f01722abc71a3/orders/history?limit=50"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "matched": false,
+          "recent3": [
+            {
+              "symbol": "vMAG7ssi_vUSDC",
+              "orderID": 1274981537,
+              "clOrdID": "hv2A_MAG7mri6wsma",
+              "side": "BUY",
+              "type": "LIMIT",
+              "timeInForce": "IOC",
+              "price": "0.45",
+              "origQty": "13.34",
+              "status": "CANCELED",
+              "executedQty": "0",
+              "executedValue": "0",
+              "marginFrozen": "0",
+              "createdAt": 1783884731513,
+              "updatedAt": 1783884731513
+            },
+            {
+              "symbol": "vMAG7ssi_vUSDC",
+              "orderID": 1274980851,
+              "clOrdID": "d2mri6pxzpva",
+              "side": "BUY",
+              "type": "LIMIT",
+              "timeInForce": "IOC",
+              "price": "0.45",
+              "origQty": "13.34",
+              "status": "CANCELED",
+              "executedQty": "0",
+              "executedValue": "0",
+              "marginFrozen": "0",
+              "createdAt": 1783884411778,
+              "updatedAt": 1783884411778
+            },
+            {
+              "symbol": "vMAG7ssi_vUSDC",
+              "orderID": 1274980787,
+              "clOrdID": "diagmri6pa6mdmt",
+              "side": "BUY",
+              "type": "LIMIT",
+              "timeInForce": "IOC",
+              "price": "0.45",
+              "origQty": "13.34",
+              "status": "CANCELED",
+              "executedQty": "0",
+              "executedValue": "0",
+              "marginFrozen": "0",
+              "createdAt": 1783884380995,
+              "updatedAt": 1783884380995
+            }
+          ]
+        }
+      },
+      "note": "not in history yet"
+    },
+    {
+      "n": "B_WSOSO.9.poll2",
+      "name": "orders_history_poll",
+      "timestamp": "2026-07-12T19:32:22.880Z",
+      "latencyMs": 593,
+      "status": "ok",
+      "http": {
+        "method": "GET",
+        "url": "https://testnet-gw.sodex.dev/api/v1/spot/accounts/0xf76e6b0920e9332ff4410f6dd53f01722abc71a3/orders/history?limit=50"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "symbol": "WSOSO_vUSDC",
+          "orderID": 1274981550,
+          "clOrdID": "hv2B_WSOSOmri6ww94",
+          "side": "BUY",
+          "type": "LIMIT",
+          "timeInForce": "IOC",
+          "price": "0.4523",
+          "origQty": "13.34",
+          "status": "FILLED",
+          "executedQty": "13.34",
+          "executedValue": "6.003",
+          "marginFrozen": "0",
+          "createdAt": 1783884736190,
+          "updatedAt": 1783884736190
+        }
+      },
+      "note": "status=FILLED executedQty=13.34 remainingQty=undefined"
+    },
+    {
+      "n": "B_WSOSO.10",
+      "name": "trades",
+      "timestamp": "2026-07-12T19:32:23.347Z",
+      "latencyMs": 467,
+      "status": "ok",
+      "http": {
+        "method": "GET",
+        "url": "https://testnet-gw.sodex.dev/api/v1/spot/accounts/0xf76e6b0920e9332ff4410f6dd53f01722abc71a3/trades?orderID=1274981550&limit=50"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "tradesForOrder": [
+            {
+              "symbol": "WSOSO_vUSDC",
+              "tradeID": 1742757,
+              "orderID": 1274981550,
+              "clOrdID": "hv2B_WSOSOmri6ww94",
+              "side": "BUY",
+              "price": "0.45",
+              "quantity": "13.34",
+              "fee": "0.008671",
+              "feeCoin": "WSOSO",
+              "time": 1783884736190,
+              "isMaker": false
+            }
+          ],
+          "rawLen": 9,
+          "rawSample": [
+            {
+              "symbol": "WSOSO_vUSDC",
+              "tradeID": 1742757,
+              "orderID": 1274981550,
+              "clOrdID": "hv2B_WSOSOmri6ww94",
+              "side": "BUY",
+              "price": "0.45",
+              "quantity": "13.34",
+              "fee": "0.008671",
+              "feeCoin": "WSOSO",
+              "time": 1783884736190,
+              "isMaker": false
+            },
+            {
+              "symbol": "WSOSO_vUSDC",
+              "tradeID": 1742756,
+              "orderID": 1274639473,
+              "clOrdID": "hl-x178373594973318",
+              "side": "BUY",
+              "price": "0.45",
+              "quantity": "4.44",
+              "fee": "0.002886",
+              "feeCoin": "WSOSO",
+              "time": 1783735949182,
+              "isMaker": false
+            },
+            {
+              "symbol": "WSOSO_vUSDC",
+              "tradeID": 1742755,
+              "orderID": 1274639472,
+              "clOrdID": "hl-x178373594911511",
+              "side": "BUY",
+              "price": "0.45",
+              "quantity": "5",
+              "fee": "0.00325",
+              "feeCoin": "WSOSO",
+              "time": 1783735948692,
+              "isMaker": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "n": "B.16",
+      "name": "orderbook_AFTER_WSOSO",
+      "timestamp": "2026-07-12T19:32:23.646Z",
+      "latencyMs": 299,
+      "status": "ok",
+      "response": {
+        "status": 200,
+        "json": {
+          "code": 0,
+          "timestamp": 1783884742610,
+          "data": {
+            "blockTime": 1783884742457,
+            "blockHeight": 185354666,
+            "updateID": 891860947,
+            "bids": [
+              [
+                "0.3",
+                "6148.56"
+              ],
+              [
+                "0.2999",
+                "68905.02"
+              ],
+              [
+                "0.2998",
+                "59700.78"
+              ],
+              [
+                "0.2997",
+                "59047.14"
+              ],
+              [
+                "0.2996",
+                "55123.33"
+              ],
+              [
+                "0.2995",
+                "50004.87"
+              ],
+              [
+                "0.2993",
+                "44777.45"
+              ],
+              [
+                "0.2992",
+                "41786.35"
+              ],
+              [
+                "0.299",
+                "77009.82"
+              ],
+              [
+                "0.2988",
+                "33250.75"
+              ],
+              [
+                "0.2987",
+                "32230.79"
+              ],
+              [
+                "0.2985",
+                "58880.51"
+              ],
+              [
+                "0.2983",
+                "25428.7"
+              ],
+              [
+                "0.2982",
+                "23232.21"
+              ],
+              [
+                "0.298",
+                "44321.53"
+              ],
+              [
+                "0.2978",
+                "18655.34"
+              ],
+              [
+                "0.2977",
+                "17115.13"
+              ],
+              [
+                "0.2975",
+                "31826.57"
+              ],
+              [
+                "0.2973",
+                "14164.48"
+              ],
+              [
+                "0.2972",
+                "13633.01"
+              ]
+            ],
+            "asks": [
+              [
+                "0.45",
+                "1371.63"
+              ],
+              [
+                "0.4565",
+                "289.25"
+              ],
+              [
+                "1",
+                "219.69"
+              ],
+              [
+                "4062",
+                "81.24"
+              ]
+            ]
+          }
+        }
+      }
+    },
+    {
+      "n": 12,
+      "name": "balances_AFTER",
+      "timestamp": "2026-07-12T19:32:24.007Z",
+      "latencyMs": 361,
+      "status": "ok",
+      "http": {
+        "method": "GET",
+        "url": "https://testnet-gw.sodex.dev/api/v1/spot/accounts/0xf76e6b0920e9332ff4410f6dd53f01722abc71a3/balances"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "code": 0,
+          "timestamp": 1783884742909,
+          "data": {
+            "blockTime": 1783884742809,
+            "blockHeight": 185354669,
+            "balances": [
+              {
+                "id": 2,
+                "coin": "vETH",
+                "total": "0.019087585",
+                "locked": "0"
+              },
+              {
+                "id": 4,
+                "coin": "WSOSO",
+                "total": "51.732693",
+                "locked": "0"
+              },
+              {
+                "id": 6,
+                "coin": "vSOL",
+                "total": "0.0359766",
+                "locked": "0"
+              },
+              {
+                "id": 0,
+                "coin": "vUSDC",
+                "total": "1217.48078",
+                "locked": "0"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "n": 14,
+      "name": "account_state_AFTER",
+      "timestamp": "2026-07-12T19:32:24.314Z",
+      "latencyMs": 307,
+      "status": "ok",
+      "response": {
+        "status": 200,
+        "json": {
+          "code": 0,
+          "timestamp": 1783884743268,
+          "data": {
+            "user": "0xf76e6b0920e9332ff4410f6dd53f01722abc71a3",
+            "aid": 54647,
+            "uid": 54647,
+            "B": [
+              {
+                "i": 0,
+                "a": "vUSDC",
+                "t": "1217.48078",
+                "l": "0"
+              },
+              {
+                "i": 2,
+                "a": "vETH",
+                "t": "0.019087585",
+                "l": "0"
+              },
+              {
+                "i": 4,
+                "a": "WSOSO",
+                "t": "51.732693",
+                "l": "0"
+              },
+              {
+                "i": 6,
+                "a": "vSOL",
+                "t": "0.0359766",
+                "l": "0"
+              }
+            ],
+            "O": null,
+            "TO": null
+          }
+        }
+      }
+    },
+    {
+      "n": 17,
+      "name": "explorer_records",
+      "timestamp": "2026-07-12T19:32:24.314Z",
+      "status": "info",
+      "note": "SoDEX CLOB fills are not EVM txs. Proof = REST history/trades/balances.",
+      "response": {
+        "json": {
+          "sodexPortfolio": "https://testnet.sodex.com/portfolio",
+          "orderID": 1274981550
+        }
+      }
+    },
+    {
+      "n": 18,
+      "name": "database_rows",
+      "timestamp": "2026-07-12T19:32:24.314Z",
+      "status": "info",
+      "note": "Direct gateway capture — no HATCH Prisma row. Production path writes signed_orders on /api/sodex/relay."
+    },
+    {
+      "n": 20,
+      "name": "final_portfolio_delta",
+      "timestamp": "2026-07-12T19:32:24.314Z",
+      "status": "ok",
+      "response": {
+        "json": {
+          "deltas": [
+            {
+              "coin": "WSOSO",
+              "before": "38.401364",
+              "after": "51.732693",
+              "delta": 13.331328999999997
+            },
+            {
+              "coin": "vUSDC",
+              "before": "1223.48378",
+              "after": "1217.48078",
+              "delta": -6.002999999999929
+            }
+          ],
+          "fillResult": {
+            "ok": true,
+            "orderID": 1274981550,
+            "clOrdID": "hv2B_WSOSOmri6ww94",
+            "finalHist": {
+              "symbol": "WSOSO_vUSDC",
+              "orderID": 1274981550,
+              "clOrdID": "hv2B_WSOSOmri6ww94",
+              "side": "BUY",
+              "type": "LIMIT",
+              "timeInForce": "IOC",
+              "price": "0.4523",
+              "origQty": "13.34",
+              "status": "FILLED",
+              "executedQty": "13.34",
+              "executedValue": "6.003",
+              "marginFrozen": "0",
+              "createdAt": 1783884736190,
+              "updatedAt": 1783884736190
+            },
+            "tradesForOrder": [
+              {
+                "symbol": "WSOSO_vUSDC",
+                "tradeID": 1742757,
+                "orderID": 1274981550,
+                "clOrdID": "hv2B_WSOSOmri6ww94",
+                "side": "BUY",
+                "price": "0.45",
+                "quantity": "13.34",
+                "fee": "0.008671",
+                "feeCoin": "WSOSO",
+                "time": 1783884736190,
+                "isMaker": false
+              }
+            ],
+            "filled": true,
+            "status": "FILLED",
+            "price": "0.4523",
+            "quantity": "13.34",
+            "symbolName": "WSOSO_vUSDC"
+          }
+        }
+      }
+    },
+    {
+      "n": 19,
+      "name": "timeline_conclusion",
+      "timestamp": "2026-07-12T19:32:24.314Z",
+      "status": "ok",
+      "note": "FILLED on WSOSO_vUSDC orderID=1274981550",
+      "response": {
+        "json": {
+          "outcome": "A_FILLED_balances_updated",
+          "fillResult": {
+            "ok": true,
+            "orderID": 1274981550,
+            "clOrdID": "hv2B_WSOSOmri6ww94",
+            "finalHist": {
+              "symbol": "WSOSO_vUSDC",
+              "orderID": 1274981550,
+              "clOrdID": "hv2B_WSOSOmri6ww94",
+              "side": "BUY",
+              "type": "LIMIT",
+              "timeInForce": "IOC",
+              "price": "0.4523",
+              "origQty": "13.34",
+              "status": "FILLED",
+              "executedQty": "13.34",
+              "executedValue": "6.003",
+              "marginFrozen": "0",
+              "createdAt": 1783884736190,
+              "updatedAt": 1783884736190
+            },
+            "tradesForOrder": [
+              {
+                "symbol": "WSOSO_vUSDC",
+                "tradeID": 1742757,
+                "orderID": 1274981550,
+                "clOrdID": "hv2B_WSOSOmri6ww94",
+                "side": "BUY",
+                "price": "0.45",
+                "quantity": "13.34",
+                "fee": "0.008671",
+                "feeCoin": "WSOSO",
+                "time": 1783884736190,
+                "isMaker": false
+              }
+            ],
+            "filled": true,
+            "status": "FILLED",
+            "price": "0.4523",
+            "quantity": "13.34",
+            "symbolName": "WSOSO_vUSDC"
+          }
+        }
+      }
+    }
+  ],
+  "outcome": "A_FILLED_balances_updated",
+  "fillResult": {
+    "ok": true,
+    "orderID": 1274981550,
+    "clOrdID": "hv2B_WSOSOmri6ww94",
+    "finalHist": {
+      "symbol": "WSOSO_vUSDC",
+      "orderID": 1274981550,
+      "clOrdID": "hv2B_WSOSOmri6ww94",
+      "side": "BUY",
+      "type": "LIMIT",
+      "timeInForce": "IOC",
+      "price": "0.4523",
+      "origQty": "13.34",
+      "status": "FILLED",
+      "executedQty": "13.34",
+      "executedValue": "6.003",
+      "marginFrozen": "0",
+      "createdAt": 1783884736190,
+      "updatedAt": 1783884736190
+    },
+    "tradesForOrder": [
+      {
+        "symbol": "WSOSO_vUSDC",
+        "tradeID": 1742757,
+        "orderID": 1274981550,
+        "clOrdID": "hv2B_WSOSOmri6ww94",
+        "side": "BUY",
+        "price": "0.45",
+        "quantity": "13.34",
+        "fee": "0.008671",
+        "feeCoin": "WSOSO",
+        "time": 1783884736190,
+        "isMaker": false
+      }
+    ],
+    "filled": true,
+    "status": "FILLED",
+    "price": "0.4523",
+    "quantity": "13.34",
+    "symbolName": "WSOSO_vUSDC"
+  },
+  "balanceDeltas": [
+    {
+      "coin": "WSOSO",
+      "before": "38.401364",
+      "after": "51.732693",
+      "delta": 13.331328999999997
+    },
+    {
+      "coin": "vUSDC",
+      "before": "1223.48378",
+      "after": "1217.48078",
+      "delta": -6.002999999999929
+    }
+  ]
+}

@@ -1,0 +1,337 @@
+{
+  "generatedAt": "2026-07-12T19:23:28.762Z",
+  "wallet": "0xf76e6b0920e9332ff4410f6dd53f01722abc71a3",
+  "accountID": 54647,
+  "chainId": 138565,
+  "gateway": "https://testnet-gw.sodex.dev/api/v1/spot",
+  "steps": [
+    {
+      "n": 0,
+      "name": "trace_meta",
+      "timestamp": "2026-07-12T19:23:26.162Z",
+      "status": "info",
+      "note": "wallet=0xf76e6b0920e9332ff4410f6dd53f01722abc71a3 accountID=54647 chainId=138565 gateway=https://testnet-gw.sodex.dev/api/v1/spot elapsed0=1"
+    },
+    {
+      "n": 13,
+      "name": "orderbook_BEFORE_vMAG7ssi_vUSDC",
+      "timestamp": "2026-07-12T19:23:27.354Z",
+      "latencyMs": 1192,
+      "status": "ok",
+      "http": {
+        "method": "GET",
+        "url": "https://testnet-gw.sodex.dev/api/v1/spot/markets/vMAG7ssi_vUSDC/orderbook?limit=20"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "code": 0,
+          "timestamp": 1783884206282,
+          "data": {
+            "blockTime": 1783884206205,
+            "blockHeight": 185349290,
+            "updateID": 884419582,
+            "bids": [
+              [
+                "0.45",
+                "2216.03"
+              ],
+              [
+                "0.4057",
+                "334.81"
+              ]
+            ],
+            "asks": []
+          }
+        }
+      },
+      "stop": false
+    },
+    {
+      "n": 11,
+      "name": "balances_BEFORE",
+      "timestamp": "2026-07-12T19:23:27.688Z",
+      "latencyMs": 334,
+      "status": "ok",
+      "http": {
+        "method": "GET",
+        "url": "https://testnet-gw.sodex.dev/api/v1/spot/accounts/0xf76e6b0920e9332ff4410f6dd53f01722abc71a3/balances"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "code": 0,
+          "timestamp": 1783884206622,
+          "data": {
+            "blockTime": 1783884206572,
+            "blockHeight": 185349293,
+            "balances": [
+              {
+                "id": 0,
+                "coin": "vUSDC",
+                "total": "1223.48378",
+                "locked": "0"
+              },
+              {
+                "id": 2,
+                "coin": "vETH",
+                "total": "0.019087585",
+                "locked": "0"
+              },
+              {
+                "id": 4,
+                "coin": "WSOSO",
+                "total": "38.401364",
+                "locked": "0"
+              },
+              {
+                "id": 6,
+                "coin": "vSOL",
+                "total": "0.0359766",
+                "locked": "0"
+              }
+            ]
+          }
+        }
+      },
+      "stop": false
+    },
+    {
+      "n": 12,
+      "name": "account_state_BEFORE",
+      "timestamp": "2026-07-12T19:23:28.003Z",
+      "latencyMs": 315,
+      "status": "ok",
+      "http": {
+        "method": "GET",
+        "url": "https://testnet-gw.sodex.dev/api/v1/spot/accounts/0xf76e6b0920e9332ff4410f6dd53f01722abc71a3/state"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "code": 0,
+          "timestamp": 1783884206961,
+          "data": {
+            "user": "0xf76e6b0920e9332ff4410f6dd53f01722abc71a3",
+            "aid": 54647,
+            "uid": 54647,
+            "B": [
+              {
+                "i": 0,
+                "a": "vUSDC",
+                "t": "1223.48378",
+                "l": "0"
+              },
+              {
+                "i": 2,
+                "a": "vETH",
+                "t": "0.019087585",
+                "l": "0"
+              },
+              {
+                "i": 4,
+                "a": "WSOSO",
+                "t": "38.401364",
+                "l": "0"
+              },
+              {
+                "i": 6,
+                "a": "vSOL",
+                "t": "0.0359766",
+                "l": "0"
+              }
+            ],
+            "O": null,
+            "TO": null
+          }
+        }
+      },
+      "stop": false
+    },
+    {
+      "n": 0,
+      "name": "ticker_vMAG7ssi_vUSDC",
+      "timestamp": "2026-07-12T19:23:28.352Z",
+      "latencyMs": 349,
+      "status": "ok",
+      "response": {
+        "status": 200,
+        "json": {
+          "symbol": "vMAG7ssi_vUSDC",
+          "lastPx": "0.45",
+          "lastSz": "340.52",
+          "openPx": "0.45",
+          "highPx": "0.45",
+          "lowPx": "0.45",
+          "volume": "340.52",
+          "quoteVolume": "153.234",
+          "vwap": "0.45",
+          "change": "0",
+          "changePct": 0,
+          "askPx": "0",
+          "askSz": "0",
+          "bidPx": "0.45",
+          "bidSz": "2216.03",
+          "openTime": 1783439738715,
+          "closeTime": 1783526138715
+        }
+      },
+      "note": "lastPx=0.45 bidPx=0.45 askPx=0 askSz=0",
+      "stop": false
+    },
+    {
+      "n": 1,
+      "name": "unsigned_payload",
+      "timestamp": "2026-07-12T19:23:28.354Z",
+      "status": "info",
+      "http": {
+        "method": "N/A",
+        "url": "local EIP-712 construction (HATCH parentSignDraft shape)",
+        "body": {
+          "envelope": {
+            "type": "batchNewOrder",
+            "params": {
+              "accountID": 54647,
+              "orders": [
+                {
+                  "symbolID": 3,
+                  "clOrdID": "hmtracemri6lkgx",
+                  "side": 1,
+                  "type": 1,
+                  "timeInForce": 3,
+                  "price": "0.4500",
+                  "quantity": "13.34"
+                }
+              ]
+            }
+          },
+          "envelopeJson": "{\"type\":\"batchNewOrder\",\"params\":{\"accountID\":54647,\"orders\":[{\"symbolID\":3,\"clOrdID\":\"hmtracemri6lkgx\",\"side\":1,\"type\":1,\"timeInForce\":3,\"price\":\"0.4500\",\"quantity\":\"13.34\"}]}}",
+          "payloadHash": "0x8af0f3aa8e4804ffb4bcf78f004e254892de8985f58c11a629645623b6f770b7",
+          "nonce": "1783884208354",
+          "domain": {
+            "name": "spot",
+            "version": "1",
+            "chainId": 138565,
+            "verifyingContract": "0x0000000000000000000000000000000000000000"
+          },
+          "primaryType": "ExchangeAction",
+          "message": {
+            "payloadHash": "0x8af0f3aa8e4804ffb4bcf78f004e254892de8985f58c11a629645623b6f770b7",
+            "nonce": "1783884208354"
+          },
+          "hatchSizing": {
+            "notionalUsd": 6,
+            "mid": 0.45,
+            "price": "0.4500",
+            "quantity": "13.34",
+            "symbolID": 3,
+            "symbol": "vMAG7ssi_vUSDC",
+            "type": "LIMIT=1",
+            "timeInForce": "IOC=3",
+            "asksBeforeCount": 0,
+            "bidsBeforeCount": 2
+          }
+        }
+      },
+      "note": "asksBefore=[] bidsTop=[[\"0.45\",\"2216.03\"],[\"0.4057\",\"334.81\"]]"
+    },
+    {
+      "n": 2,
+      "name": "signed_eip712",
+      "timestamp": "2026-07-12T19:23:28.373Z",
+      "latencyMs": 3,
+      "status": "ok",
+      "response": {
+        "json": {
+          "rawSig": "0xccf004f2bb49db76e986b120912d3e12bbc66ce1c5a6ccc568c47e54449bbc3e125c162f5319b4834e267b21b0f879e9a4a4c1b1d036d8970779f1c8490a27001c",
+          "apiSign": "0x01ccf004f2bb49db76e986b120912d3e12bbc66ce1c5a6ccc568c47e54449bbc3e125c162f5319b4834e267b21b0f879e9a4a4c1b1d036d8970779f1c8490a270001",
+          "signer": "0xf76e6B0920e9332fF4410f6dD53F01722AbC71a3",
+          "payloadHash": "0x8af0f3aa8e4804ffb4bcf78f004e254892de8985f58c11a629645623b6f770b7",
+          "nonce": "1783884208354"
+        }
+      }
+    },
+    {
+      "n": 3,
+      "name": "relay_request_HATCH_headers",
+      "timestamp": "2026-07-12T19:23:28.373Z",
+      "status": "info",
+      "http": {
+        "method": "POST",
+        "url": "https://testnet-gw.sodex.dev/api/v1/spot/trade/orders/batch",
+        "headers": {
+          "accept": "application/json",
+          "content-type": "application/json",
+          "X-API-Sign": "0x01ccf004f2bb49db…",
+          "X-API-Nonce": "1783884208354"
+        },
+        "body": {
+          "accountID": 54647,
+          "orders": [
+            {
+              "symbolID": 3,
+              "clOrdID": "hmtracemri6lkgx",
+              "side": 1,
+              "type": 1,
+              "timeInForce": 3,
+              "price": "0.4500",
+              "quantity": "13.34"
+            }
+          ]
+        }
+      },
+      "note": "HATCH packages/backend/src/clients/sodex.ts relay() — does NOT send X-API-Chain"
+    },
+    {
+      "n": 4,
+      "name": "relay_response_HTTP",
+      "timestamp": "2026-07-12T19:23:28.762Z",
+      "latencyMs": 389,
+      "status": "ok",
+      "http": {
+        "method": "POST",
+        "url": "https://testnet-gw.sodex.dev/api/v1/spot/trade/orders/batch"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "cf-cache-status": "DYNAMIC",
+          "cf-ray": "a1a26c28ff9ce1c9-MRS",
+          "connection": "keep-alive",
+          "content-encoding": "gzip",
+          "content-type": "application/json; charset=utf-8",
+          "date": "Sun, 12 Jul 2026 19:23:27 GMT",
+          "server": "cloudflare",
+          "set-cookie": "__cf_bm=un6_QrBx7O_FBU7VKTa6E_N69KcFiVu3H.EBPtVwxME-1783884207.5167978-1.0.1.1-uuAEg9bnpVx_B1eKV0AdlMOBG47VYeARVG8.pLGy8dVwy6I4UImKCmnNvqdjYvZazxho0Nmjv0hJB2zSTjlaJjV0pKeyIHSMSDYlvzDrhV2mqgYVl77pNUHDtGMHGDnJ; HttpOnly; SameSite=None; Secure; Path=/; Domain=sodex.dev; Expires=Sun, 12 Jul 2026 19:53:27 GMT",
+          "strict-transport-security": "max-age=31536000; includeSubDomains",
+          "transfer-encoding": "chunked",
+          "x-ratelimit-limit": "6000",
+          "x-ratelimit-remaining": "5732",
+          "x-ratelimit-reset": "1783884240"
+        },
+        "json": {
+          "code": -1,
+          "timestamp": 1783884207644,
+          "error": "price is invalid"
+        },
+        "text": "{\"code\":-1,\"timestamp\":1783884207644,\"error\":\"price is invalid\"}"
+      },
+      "stop": false
+    },
+    {
+      "n": 5,
+      "name": "exchange_response_JSON",
+      "timestamp": "2026-07-12T19:23:28.762Z",
+      "status": "fail",
+      "response": {
+        "json": {
+          "code": -1,
+          "timestamp": 1783884207644,
+          "error": "price is invalid"
+        }
+      },
+      "note": "topCode=-1 timestamp=1783884207644",
+      "stop": true
+    }
+  ]
+}

@@ -27,6 +27,9 @@ import {
   type SpotTimeInForce,
 } from "./spotOrders.js";
 import {
+  formatDecimal,
+  formatPrice,
+  getStepSize,
   type SpotSymbolMeta,
 } from "./sodexSymbols.js";
 
@@ -116,8 +119,7 @@ function sizeLimitBuy(notionalUsd: number, mid: number, meta: SpotSymbolMeta): {
       400,
     );
   }
-  const step = meta.stepSize > 0 ? meta.stepSize : 0.01;
-  const prec = meta.quantityPrecision >= 0 ? meta.quantityPrecision : 2;
+  const step = getStepSize(meta);
   // Round UP so lot-size never drops under minNotional
   const rawQty = Math.max(notionalUsd / mid, meta.minNotional / mid);
   const stepped = Math.ceil(rawQty / step - 1e-12) * step;
@@ -128,7 +130,8 @@ function sizeLimitBuy(notionalUsd: number, mid: number, meta: SpotSymbolMeta): {
       400,
     );
   }
-  const quantity = stepped.toFixed(prec);
+  // Reference formatDecimal (round mode) after ceil — strips trailing zeros
+  const quantity = formatDecimal(stepped, step, "round");
   const notionalCheck = Number(quantity) * mid;
   if (notionalCheck + 1e-9 < meta.minNotional) {
     throw new HatchError(
@@ -137,11 +140,11 @@ function sizeLimitBuy(notionalUsd: number, mid: number, meta: SpotSymbolMeta): {
       400,
     );
   }
-  // LIMIT IOC at mid — fill or expire honestly (no silent resting)
+  // LIMIT IOC at mid — SoDEX-accepted price string (no toFixed padding)
   return {
     type: 1,
     timeInForce: 3,
-    price: mid.toFixed(4),
+    price: formatPrice(mid, meta),
     quantity,
   };
 }

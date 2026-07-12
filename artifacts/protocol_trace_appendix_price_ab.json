@@ -1,0 +1,19 @@
+{
+  "note": "Diagnostics AFTER primary STOP. Not continuation of investment attempt.",
+  "capturedAt": "2026-07-12T19:26:00Z",
+  "results": [
+    {"price": "0.4500", "code": -1, "error": "price is invalid"},
+    {"price": "0.450", "code": -1, "error": "price is invalid"},
+    {"price": "0.45000", "code": -1, "error": "price is invalid"},
+    {"price": "0.45", "code": 0, "orderID": 1274980851},
+    {"price": "0.45225", "code": -1, "error": "price is invalid"},
+    {"price": "0.4523", "code": 0, "orderID": 1274980786},
+    {"price": "0.50", "code": -1, "error": "price is invalid"},
+    {"price": "0.45", "X-API-Chain": "138565", "code": 0, "orderID": 1274980787}
+  ],
+  "acceptedThenCanceled": [
+    {"orderID": 1274980785, "status": "CANCELED", "executedQty": "0", "price": "0.45"},
+    {"orderID": 1274980786, "status": "CANCELED", "executedQty": "0", "price": "0.4523"},
+    {"orderID": 1274980787, "status": "CANCELED", "executedQty": "0", "price": "0.45"}
+  ]
+}

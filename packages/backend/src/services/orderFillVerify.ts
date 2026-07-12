@@ -110,7 +110,7 @@ export function parseBatchRelayResponse(data: unknown): {
   return { topCode, legs, accepted };
 }
 
-function hatchStatusFromSodex(
+function hatchStatusFromProtocol(
   st: SodexOrderStatusString,
 ): "SUBMITTED" | "FILLED" | "PARTIAL" | "REJECTED" | "FAILED" {
   if (st === "FILLED") return "FILLED";
@@ -119,6 +119,119 @@ function hatchStatusFromSodex(
     return "REJECTED";
   if (st === "NEW") return "SUBMITTED";
   return "SUBMITTED";
+}
+
+// retained for clarity in audits — fill path uses assertFillEvidence instead
+void hatchStatusFromProtocol;
+
+function unwrapBalances(payload: unknown): Array<Record<string, unknown>> {
+  if (!payload) return [];
+  if (Array.isArray(payload)) return payload as Array<Record<string, unknown>>;
+  if (typeof payload === "object") {
+    const o = payload as Record<string, unknown>;
+    if (Array.isArray(o.data)) return o.data as Array<Record<string, unknown>>;
+    if (o.data && typeof o.data === "object") {
+      const d = o.data as Record<string, unknown>;
+      if (Array.isArray(d.balances)) return d.balances as Array<Record<string, unknown>>;
+    }
+  }
+  return [];
+}
+
+function coinTotal(balances: unknown, coinHint: string): number {
+  const rows = unwrapBalances(balances);
+  const hint = coinHint.toUpperCase().replace(/^V/, "");
+  let best = 0;
+  for (const r of rows) {
+    const coin = String(r.coin ?? r.asset ?? r.symbol ?? "").toUpperCase();
+    if (!coin) continue;
+    if (
+      coin === coinHint.toUpperCase() ||
+      coin === hint ||
+      coin.replace(/^V/, "") === hint ||
+      coin.includes(hint)
+    ) {
+      const total = Number(r.total ?? r.free ?? r.available ?? 0);
+      if (Number.isFinite(total) && total > best) best = total;
+    }
+  }
+  return best;
+}
+
+/**
+ * FILLED only when protocol evidence is complete:
+ * executedQty > 0 AND at least one trade AND (when possible) base balance increased.
+ */
+function assertFillEvidence(input: {
+  sodexStatus: SodexOrderStatusString | null;
+  filledQty: string | null;
+  tradeIds: string[];
+  symbolName: string;
+  balancesBefore: unknown;
+  balancesAfter: unknown;
+}): {
+  hatchStatus: "FILLED" | "PARTIAL" | "REJECTED" | "SUBMITTED" | null;
+  mismatches: string[];
+  balanceChanged: boolean;
+  fillProven: boolean;
+} {
+  const mismatches: string[] = [];
+  const qty = Number(input.filledQty ?? 0);
+  const hasTrade = input.tradeIds.length > 0;
+  const baseHint = String(input.symbolName || "").split("_")[0] || "";
+  const before = coinTotal(input.balancesBefore, baseHint);
+  const after = coinTotal(input.balancesAfter, baseHint);
+  const balanceChanged =
+    input.balancesBefore != null && after + 1e-12 > before;
+
+  if (input.sodexStatus === "FILLED" || input.sodexStatus === "PARTIALLY_FILLED") {
+    if (!(qty > 0)) mismatches.push("status claims fill but executedQty is zero");
+    if (!hasTrade) mismatches.push("status claims fill but no trade in SoDEX trade history");
+    if (input.balancesBefore != null && !balanceChanged) {
+      mismatches.push(
+        `status claims fill but ${baseHint || "base"} balance did not increase (before=${before}, after=${after})`,
+      );
+    }
+  }
+
+  if (input.sodexStatus === "EXPIRED" || input.sodexStatus === "CANCELED") {
+    mismatches.push(
+      `SoDEX terminal status ${input.sodexStatus} with executedQty=${input.filledQty ?? "0"} — no fill credited`,
+    );
+    return {
+      hatchStatus: qty > 0 && hasTrade ? (input.sodexStatus === "CANCELED" && qty > 0 ? "PARTIAL" : "REJECTED") : "REJECTED",
+      mismatches,
+      balanceChanged,
+      fillProven: false,
+    };
+  }
+  if (input.sodexStatus === "REJECTED") {
+    mismatches.push("SoDEX rejected the order");
+    return { hatchStatus: "REJECTED", mismatches, balanceChanged, fillProven: false };
+  }
+
+  const fillProven =
+    qty > 0 &&
+    hasTrade &&
+    (input.balancesBefore == null || balanceChanged);
+
+  if (input.sodexStatus === "FILLED") {
+    if (fillProven) {
+      return { hatchStatus: "FILLED", mismatches, balanceChanged, fillProven: true };
+    }
+    mismatches.push("FILLED withheld — missing executedQty, trade, or balance delta");
+    return { hatchStatus: "SUBMITTED", mismatches, balanceChanged, fillProven: false };
+  }
+  if (input.sodexStatus === "PARTIALLY_FILLED") {
+    if (fillProven) {
+      return { hatchStatus: "PARTIAL", mismatches, balanceChanged, fillProven: true };
+    }
+    return { hatchStatus: "SUBMITTED", mismatches, balanceChanged, fillProven: false };
+  }
+  if (input.sodexStatus === "NEW") {
+    return { hatchStatus: "SUBMITTED", mismatches, balanceChanged, fillProven: false };
+  }
+  return { hatchStatus: null, mismatches, balanceChanged, fillProven: false };
 }
 
 export type OrderVerification = {
@@ -142,6 +255,12 @@ export type OrderVerification = {
   sodexAppUrl: string;
   waitingForMatch: boolean;
   protocolNote: string;
+  fillEvidence?: {
+    executedQty: number;
+    tradeCount: number;
+    balanceChanged: boolean;
+    fillProven: boolean;
+  };
 };
 
 function unwrapDataArray(payload: unknown): unknown[] {
@@ -247,24 +366,32 @@ export async function verifySignedOrderAgainstSodex(input: {
       "Order not yet in SoDEX order history — waiting for matching / settlement",
     );
   }
-  if (sodexStatus === "EXPIRED" || sodexStatus === "CANCELED") {
-    mismatches.push(
-      `SoDEX terminal status ${sodexStatus} with executedQty=${filledQty ?? "0"} — no fill credited`,
-    );
-  }
-  if (sodexStatus === "REJECTED") {
-    mismatches.push("SoDEX rejected the order");
-  }
-  if (
-    sodexStatus === "FILLED" &&
-    (!filledQty || Number(filledQty) <= 0)
-  ) {
-    mismatches.push("FILLED status but executedQty is zero");
-  }
 
-  // Persist hatch status from protocol
+  const prevJson =
+    typeof row.sodexResponseJson === "object" && row.sodexResponseJson
+      ? (row.sodexResponseJson as Record<string, unknown>)
+      : {};
+  const balancesBefore = prevJson.balancesBefore ?? null;
+
+  const evidence = assertFillEvidence({
+    sodexStatus,
+    filledQty,
+    tradeIds,
+    symbolName: row.symbolName,
+    balancesBefore,
+    balancesAfter: balances,
+  });
+  mismatches.push(...evidence.mismatches);
+
+  // Persist hatch status only from protocol evidence — never from relay HTTP alone
   if (sodexStatus && TERMINAL.has(sodexStatus)) {
-    const next = hatchStatusFromSodex(sodexStatus);
+    const next =
+      evidence.hatchStatus ??
+      (sodexStatus === "CANCELED" ||
+      sodexStatus === "EXPIRED" ||
+      sodexStatus === "REJECTED"
+        ? "REJECTED"
+        : "SUBMITTED");
     const sodexOrderId =
       row.sodexOrderId ||
       (orderRow?.orderID != null ? String(orderRow.orderID) : null);
@@ -274,10 +401,7 @@ export async function verifySignedOrderAgainstSodex(input: {
         status: next,
         sodexOrderId: sodexOrderId ?? undefined,
         sodexResponseJson: {
-          ...(typeof row.sodexResponseJson === "object" &&
-          row.sodexResponseJson
-            ? (row.sodexResponseJson as object)
-            : {}),
+          ...prevJson,
           verification: {
             sodexStatus,
             filledQty,
@@ -287,16 +411,22 @@ export async function verifySignedOrderAgainstSodex(input: {
             orderHistoryRow: orderRow,
             verifiedAt: new Date().toISOString(),
             mismatches,
+            fillEvidence: {
+              executedQty: Number(filledQty ?? 0),
+              tradeCount: tradeIds.length,
+              balanceChanged: evidence.balanceChanged,
+              fillProven: evidence.fillProven,
+            },
           },
         } as object,
-        error:
-          next === "REJECTED" || next === "FAILED"
-            ? `SoDEX ${sodexStatus}`
-            : null,
+        error: next === "REJECTED" ? `SoDEX ${sodexStatus}` : null,
       },
     });
 
-    if (next === "FILLED" || next === "PARTIAL") {
+    if (
+      (next === "FILLED" || next === "PARTIAL") &&
+      evidence.fillProven
+    ) {
       await enqueueJob("portfolio_sync", {
         trigger: "order_filled",
         childId: row.childId,
@@ -316,7 +446,8 @@ export async function verifySignedOrderAgainstSodex(input: {
     !sodexStatus ||
     sodexStatus === "NEW" ||
     sodexStatus === "UNKNOWN" ||
-    (refreshed?.status === "SUBMITTED" && !TERMINAL.has(sodexStatus ?? ""));
+    (refreshed?.status === "SUBMITTED" &&
+      (!TERMINAL.has(sodexStatus ?? "") || !evidence.fillProven));
 
   return {
     signedOrderId: row.id,
@@ -324,7 +455,10 @@ export async function verifySignedOrderAgainstSodex(input: {
     sodexOrderId: refreshed?.sodexOrderId ?? row.sodexOrderId,
     hatchStatus: refreshed?.status ?? row.status,
     sodexStatus,
-    executionStatus: sodexStatus ?? (waitingForMatch ? "WAITING_FOR_MATCH" : "UNKNOWN"),
+    executionStatus:
+      evidence.fillProven && sodexStatus === "FILLED"
+        ? "FILLED"
+        : sodexStatus ?? (waitingForMatch ? "WAITING_FOR_MATCH" : "UNKNOWN"),
     filledQty,
     filledValue,
     filledPrice,
@@ -338,8 +472,14 @@ export async function verifySignedOrderAgainstSodex(input: {
     mismatches,
     sodexAppUrl: sodex.appUrl,
     waitingForMatch,
+    fillEvidence: {
+      executedQty: Number(filledQty ?? 0),
+      tradeCount: tradeIds.length,
+      balanceChanged: evidence.balanceChanged,
+      fillProven: evidence.fillProven,
+    },
     protocolNote:
-      "Path A buys SoDEX vault tokens (vMAG7.ssi / vUSSI on ValueChain). Base SSI site (ssi.sosovalue.com) does not auto-update from SoDEX fills — HATCH portfolio must match SoDEX balances/trades.",
+      "Path A buys SoDEX vault tokens on ValueChain. FILLED requires executedQty > 0, a SoDEX trade, and (when snapshotted) a base-balance increase. Relay HTTP alone never proves a fill.",
   };
 }
 

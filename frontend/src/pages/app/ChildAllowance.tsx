@@ -14,8 +14,22 @@ import { StoryPipeline, derivePipeline } from "@/components/story/StoryPipeline"
 import { ExplorerLinkCard } from "@/components/story/ExplorerLink";
 import { useInfraLive } from "@/components/story/InfraStatus";
 import { useState, useMemo } from "react";
-import { ExternalLink } from "lucide-react";
+import { Check, ExternalLink } from "lucide-react";
 import { toSodexWireApiSign } from "@/lib/sodexSign";
+
+function displayBase(symbol: string, base?: string) {
+  const b = (base || symbol.split("_")[0] || symbol).replace(/^v/i, "");
+  return b.replace(/ssi$/i, "").toUpperCase() || symbol;
+}
+
+function Row({ k, v }: { k: string; v: string }) {
+  return (
+    <div className="flex items-start justify-between gap-4">
+      <span className="text-white/45">{k}</span>
+      <span className="text-right text-white/85">{v}</span>
+    </div>
+  );
+}
 
 export default function ChildAllowance() {
   const { childId } = useParams();
@@ -25,12 +39,18 @@ export default function ChildAllowance() {
   const { address } = useAccount();
   const [lastRoute, setLastRoute] = useState<any>(null);
   const [signing, setSigning] = useState(false);
-
   const [lastOrderId, setLastOrderId] = useState<string | null>(null);
   const [phase, setPhase] = useState<string | null>(null);
+  const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
 
-  const allowances = useQuery({ queryKey: ["allowances"], queryFn: () => api.get<any>("/api/allowances") });
-  const readiness = useQuery({ queryKey: ["sodex-readiness"], queryFn: () => api.get<any>("/api/sodex/readiness") });
+  const allowances = useQuery({
+    queryKey: ["allowances"],
+    queryFn: () => api.get<any>("/api/allowances"),
+  });
+  const readiness = useQuery({
+    queryKey: ["sodex-readiness"],
+    queryFn: () => api.get<any>("/api/sodex/readiness"),
+  });
   const handoffs = useQuery({
     queryKey: ["allowances", "handoffs"],
     queryFn: () => api.get<any>("/api/allowances/handoffs"),
@@ -46,6 +66,23 @@ export default function ChildAllowance() {
     queryFn: () => api.get<any>(`/api/lessons/${childId}`),
     enabled: !!childId,
   });
+
+  const policy = (allowances.data?.policies || []).find((p: any) => p.childId === childId);
+  const notional = Number(policy?.amountUsd || 0);
+
+  const discovery = useQuery({
+    queryKey: ["market-discovery", notional, live.network],
+    queryFn: () =>
+      api.get<any>(`/api/sodex/markets/executable?notionalUsd=${encodeURIComponent(String(notional || 5))}`, {
+        auth: false,
+      }),
+    enabled: !!policy,
+    refetchInterval: 30_000,
+  });
+
+  const available = discovery.data?.available || discovery.data?.report?.available || [];
+  const unavailable = discovery.data?.unavailable || discovery.data?.report?.unavailable || [];
+
   const verification = useQuery({
     queryKey: ["order-verification", lastOrderId],
     queryFn: () => api.get<any>(`/api/sodex/orders/${lastOrderId}/verification`),
@@ -56,11 +93,11 @@ export default function ChildAllowance() {
       const sodex = String(v.sodexStatus || "").toUpperCase();
       const hatch = String(v.hatchStatus || "").toUpperCase();
       if (["FILLED", "CANCELED", "CANCELLED", "EXPIRED", "REJECTED", "FAILED"].includes(sodex)) {
-        return false;
+        if (v.fillEvidence?.fillProven || ["CANCELED", "CANCELLED", "EXPIRED", "REJECTED"].includes(sodex)) {
+          return false;
+        }
       }
-      if (["FILLED", "REJECTED", "FAILED"].includes(hatch) && !v.waitingForMatch) {
-        return false;
-      }
+      if (["FILLED", "REJECTED", "FAILED"].includes(hatch) && !v.waitingForMatch) return false;
       if (v.waitingForMatch || hatch === "SUBMITTED" || v.executionStatus === "WAITING_FOR_MATCH") {
         return 2_000;
       }
@@ -68,7 +105,6 @@ export default function ChildAllowance() {
     },
   });
 
-  const policy = (allowances.data?.policies || []).find((p: any) => p.childId === childId);
   const ready = friendlyReadiness(readiness.data?.nextStep);
   const pendingForChild = (handoffs.data?.handoffs || []).some(
     (h: any) => h.childId === childId && (h.status === "pending" || !h.status),
@@ -77,7 +113,12 @@ export default function ChildAllowance() {
   const lessonItems = lessons.data?.lessons || lessons.data || [];
   const v = verification.data?.verification;
   const orderStatus = v?.hatchStatus || v?.executionStatus || (lastOrderId ? "SUBMITTED" : null);
-  const filled = String(orderStatus).toUpperCase() === "FILLED" || v?.sodexStatus === "FILLED";
+
+  const filled =
+    !!v?.fillEvidence?.fillProven &&
+    Number(v?.filledQty || 0) > 0 &&
+    Array.isArray(v?.tradeIds) &&
+    v.tradeIds.length > 0;
 
   const pipeline = useMemo(
     () =>
@@ -128,8 +169,12 @@ export default function ChildAllowance() {
 
   const signAndRelay = useMutation({
     mutationFn: async () => {
+      if (!selectedSymbol) throw new Error("Pick an available market first");
       setPhase("Scanning markets");
-      const res = await api.post<any>("/api/allowances/sign-draft", { policyId: policy?.id });
+      const res = await api.post<any>("/api/allowances/sign-draft", {
+        policyId: policy?.id,
+        symbol: selectedSymbol,
+      });
       const draft = res.draft ?? res;
       setLastRoute(res.route || draft.route || null);
       const td = draft.typedData;
@@ -148,7 +193,6 @@ export default function ChildAllowance() {
           nonce: BigInt(td.message.nonce),
         },
       });
-      // MetaMask v may be 27/28 — normalize to SoDEX wire 0x01+r/s/v(0|1)
       const apiSign = toSodexWireApiSign(signature);
       const relayReq = { ...(draft.relayRequest || {}), apiSign };
       setPhase("Relay Accepted");
@@ -163,25 +207,25 @@ export default function ChildAllowance() {
       if (data?.signedOrderId) setLastOrderId(String(data.signedOrderId));
       const st = String(data?.hatchStatus || "");
       const ver = data?.verification;
-      if (st === "FILLED" || ver?.sodexStatus === "FILLED") {
+      if (ver?.fillEvidence?.fillProven || st === "FILLED") {
         toast.success("Order filled on SoDEX");
       } else if (st === "SUBMITTED" || data?.relayAccepted) {
-        toast.message("Relay accepted — polling SoDEX order history until terminal");
+        toast.message("Relay accepted — verifying via SoDEX history, trades, and balances");
       } else {
-        toast.error(data?.note || "Order was not accepted by SoDEX");
+        toast.error(data?.note || data?.sodexError || "Order was not accepted by SoDEX");
       }
       qc.invalidateQueries({ queryKey: ["portfolio", childId] });
       qc.invalidateQueries({ queryKey: ["allowances"] });
       qc.invalidateQueries({ queryKey: ["order-verification"] });
+      qc.invalidateQueries({ queryKey: ["market-discovery"] });
     },
     onError: (e: any) => {
       const map: Record<string, string> = {
         notional_cap: "That amount is above your safety limit.",
-        notional_too_small:
-          e?.message || "SoDEX minNotional is $5 for MAG7/USSI. Raise the weekly allowance.",
+        notional_too_small: e?.message || "Raise the weekly allowance to meet SoDEX minNotional.",
         no_executable_liquidity:
-          e?.message ||
-          "No SoDEX market has enough ask liquidity right now. HATCH will not submit into an empty book.",
+          e?.message || "No SoDEX market has enough ask liquidity right now.",
+        market_not_executable: e?.message || "That market is no longer executable. Pick another.",
         kill_switch: "Investing is temporarily paused. Try again shortly.",
         sig_verify_failed: "Wallet signature didn't match. Please try again.",
       };
@@ -221,8 +265,100 @@ export default function ChildAllowance() {
         subtitle="Every step comes from SoDEX order history, trades, and balances — never assumed."
       />
 
+      <SectionCard
+        title="Today's available markets"
+        subtitle="Live SoDEX discovery. Only executable markets can be selected."
+      >
+        {discovery.isLoading ? (
+          <p className="text-sm text-white/45">Scanning every SoDEX market…</p>
+        ) : available.length === 0 ? (
+          <p className="text-sm text-amber-100/80">
+            No executable markets for {fmtUsd(notional)} right now. See unavailable reasons below.
+          </p>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {available.map((m: any) => {
+              const on = selectedSymbol === m.symbol;
+              return (
+                <button
+                  key={m.symbol}
+                  type="button"
+                  onClick={() => setSelectedSymbol(m.symbol)}
+                  className={`rounded-2xl border p-4 text-left transition ${
+                    on
+                      ? "border-emerald-400/40 bg-emerald-400/[0.08]"
+                      : "border-white/[0.07] bg-white/[0.02] hover:border-white/15"
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/[0.06] text-[10px] font-semibold text-white/70">
+                        {displayBase(m.symbol, m.base).slice(0, 3)}
+                      </span>
+                      <div>
+                        <div className="text-sm font-medium text-white">
+                          {displayBase(m.symbol, m.base)}
+                        </div>
+                        <div className="text-[10px] text-white/35">{m.symbol}</div>
+                      </div>
+                    </div>
+                    {on ? (
+                      <Check className="h-4 w-4 text-emerald-300" />
+                    ) : (
+                      <span className="text-[10px] uppercase tracking-wide text-emerald-300/80">
+                        Available
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 font-mono text-[11px] text-white/50">
+                    <span>Ask {m.bestAsk ?? "—"}</span>
+                    <span>Depth {fmtUsd(m.askDepthUsd)}</span>
+                    <span>
+                      Spread{" "}
+                      {m.spreadPct != null ? `${(m.spreadPct * 100).toFixed(2)}%` : "—"}
+                    </span>
+                    <span>Score {m.score}</span>
+                    <span>
+                      Fill ~{Math.round((m.estimatedFillProbability || 0) * 100)}%
+                    </span>
+                    <span>
+                      Slip ~{m.expectedSlippageBps != null ? `${m.expectedSlippageBps} bps` : "—"}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-[11px] text-white/35">
+                    Risk: live book · Est. match: IOC seconds
+                  </p>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {unavailable.length > 0 && (
+          <div className="mt-6">
+            <h4 className="mb-2 text-xs font-medium uppercase tracking-[0.14em] text-white/35">
+              Unavailable today
+            </h4>
+            <div className="max-h-48 space-y-1.5 overflow-y-auto rounded-xl border border-white/[0.06] p-2">
+              {unavailable.slice(0, 24).map((m: any) => (
+                <div
+                  key={m.symbol}
+                  className="flex items-center justify-between gap-3 rounded-lg px-2 py-1.5 text-xs text-white/45"
+                >
+                  <span className="truncate">
+                    {displayBase(m.symbol, m.base)}{" "}
+                    <span className="text-white/25">{m.symbol}</span>
+                  </span>
+                  <span className="shrink-0 text-amber-200/70">{m.reason}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </SectionCard>
+
       {lastRoute && (
-        <SectionCard title="Execution route" subtitle="Liquidity-aware selection from live SoDEX books">
+        <SectionCard title="Execution route" subtitle="Live discovery evidence for this invest">
           <div className="space-y-2.5 text-sm">
             <Row k="Market" v={String(lastRoute.symbol)} />
             <Row k="Best ask" v={lastRoute.bestAsk != null ? String(lastRoute.bestAsk) : "-"} />
@@ -246,14 +382,14 @@ export default function ChildAllowance() {
           networkLabel={`${live.network} · SoDEX vault (not ValueChain HATCHLog)`}
           detail={
             filled
-              ? "SoDEX confirmed FILLED. Portfolio refresh uses live balances and trades."
+              ? "Fill proven: executedQty > 0, trade exists, balance evidence checked."
               : canceled
-                ? `Terminal SoDEX status ${v?.sodexStatus || v?.hatchStatus}. No fill credited unless executedQty > 0.`
+                ? `Terminal SoDEX status ${v?.sodexStatus || v?.hatchStatus}. No fill credited unless evidence is complete.`
                 : v?.waitingForMatch
-                ? "Relay accepted. Waiting for matching — UI will not show Filled until SoDEX order history confirms it."
-                : v?.mismatches?.length
-                  ? v.mismatches.join(" · ")
-                  : "Tracking live SoDEX execution status."
+                  ? "Relay accepted. FILLED only after SoDEX history + trades + balances confirm it."
+                  : v?.mismatches?.length
+                    ? v.mismatches.join(" · ")
+                    : "Tracking live SoDEX execution status."
           }
         />
       )}
@@ -266,18 +402,14 @@ export default function ChildAllowance() {
             <div className="space-y-2 text-sm">
               <Row k="Wallet" v={address ? shortAddr(address) : "-"} />
               <Row k="Order ID" v={v?.sodexOrderId ? String(v.sodexOrderId) : "Synchronization Pending"} />
-              <Row k="Client order" v={v?.clOrdId ? shortAddr(v.clOrdId) : shortAddr(lastOrderId)} />
-              <Row
-                k="Trade ID"
-                v={v?.tradeIds?.length ? v.tradeIds.map(String).join(", ") : "Synchronization Pending"}
-              />
+              <Row k="Trade ID" v={v?.tradeIds?.length ? v.tradeIds.map(String).join(", ") : "Synchronization Pending"} />
               <Row k="Execution status" v={String(v?.executionStatus || v?.hatchStatus || "UNKNOWN")} />
               <Row k="Filled quantity" v={v?.filledQty != null ? String(v.filledQty) : "Synchronization Pending"} />
-              <Row k="Filled price" v={v?.filledPrice != null ? String(v.filledPrice) : "Synchronization Pending"} />
-              <Row k="Settlement time" v={v?.lastSyncAt ? fmtDate(v.lastSyncAt) : "-"} />
+              <Row
+                k="Fill proven"
+                v={v?.fillEvidence?.fillProven ? "Yes (qty + trade + balance)" : "Not yet"}
+              />
               <Row k="Last sync" v={v?.lastSyncAt ? fmtDate(v.lastSyncAt) : "-"} />
-              <Row k="SSI sync status" v="Path A = SoDEX vault tokens (not Base SSI site auto-update)" />
-              <Row k="Backend time" v={verification.data?.backendTime ? fmtDate(verification.data.backendTime) : "-"} />
               <div className="flex flex-wrap gap-3 pt-2 text-xs">
                 {v?.sodexAppUrl && (
                   <a
@@ -287,23 +419,6 @@ export default function ChildAllowance() {
                     className="inline-flex items-center gap-1 text-sky-200/80 hover:text-sky-100"
                   >
                     SoDEX portfolio <ExternalLink className="h-3 w-3" />
-                  </a>
-                )}
-                {address &&
-                  (live.network === "mainnet"
-                    ? live.config?.valuechain?.mainnet?.explorerUrl
-                    : live.config?.valuechain?.testnet?.explorerUrl) && (
-                  <a
-                    href={`${
-                      live.network === "mainnet"
-                        ? live.config.valuechain.mainnet.explorerUrl
-                        : live.config.valuechain.testnet.explorerUrl
-                    }/address/${address}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1 text-sky-200/80 hover:text-sky-100"
-                  >
-                    Your ValueChain address <ExternalLink className="h-3 w-3" />
                   </a>
                 )}
               </div>
@@ -317,7 +432,6 @@ export default function ChildAllowance() {
                   </ul>
                 </div>
               )}
-              {v?.protocolNote && <p className="pt-2 text-xs text-white/40">{v.protocolNote}</p>}
             </div>
           )}
         </SectionCard>
@@ -335,7 +449,7 @@ export default function ChildAllowance() {
           </div>
           {Number(policy.amountUsd) < 5 && (
             <p className="mt-3 text-xs text-amber-200/80">
-              SoDEX requires minNotional $5 for MAG7/USSI. Raise this weekly amount to at least $5 before approving.
+              SoDEX minNotional is typically $5. Raise this weekly amount before approving.
             </p>
           )}
           <div className="mt-4 flex flex-wrap gap-2">
@@ -353,29 +467,36 @@ export default function ChildAllowance() {
               onClick={() => trigger.mutate()}
               disabled={trigger.isPending}
             >
-              Invest this week now
+              Prepare this week
             </Button>
           </div>
         </SectionCard>
 
-        <SectionCard title="Invest now" subtitle="Confirm in your wallet. You stay in control of every investment.">
+        <SectionCard
+          title="Execute selected market"
+          subtitle="You pick. Live books only. Wallet signature required."
+        >
           {notReady ? (
             <div className="rounded-xl border border-amber-400/25 bg-amber-400/[0.06] p-3 text-xs text-amber-100/90">
-              Almost ready. <StatusPip tone={ready.tone} label={ready.label} className="inline-flex" /> Finish setup
-              under Trading, then come back.
+              Almost ready. <StatusPip tone={ready.tone} label={ready.label} className="inline-flex" /> Finish
+              setup under Trading, then come back.
             </div>
           ) : (
             <ol className="space-y-2 text-sm text-white/70">
-              <li>1. Scan live SoDEX books and score executable markets (skip empty asks).</li>
-              <li>2. Route to the best liquid instrument for this week's plan.</li>
-              <li>3. You approve in your wallet (no network fee for this step).</li>
-              <li>4. Poll SoDEX history until FILLED, CANCELED, EXPIRED, or REJECTED.</li>
+              <li>1. Pick a market from Available today.</li>
+              <li>2. Approve the EIP-712 request in your wallet.</li>
+              <li>3. HATCH relays your signature only (never re-signs).</li>
+              <li>4. FILLED only after SoDEX history + trades + balances prove it.</li>
             </ol>
+          )}
+          {selectedSymbol && (
+            <p className="mt-3 text-xs text-emerald-200/80">Selected: {selectedSymbol}</p>
           )}
           {phase && <p className="mt-2 text-xs text-sky-200/80">{phase}…</p>}
           <Button
             className="mt-4 bg-white text-black hover:bg-white/90"
             disabled={
+              !selectedSymbol ||
               signAndRelay.isPending ||
               signing ||
               notReady ||
@@ -390,29 +511,21 @@ export default function ChildAllowance() {
                 ? "Waiting for SoDEX fill…"
                 : filled
                   ? "Invest again"
-                  : "Approve investment"}
+                  : selectedSymbol
+                    ? `Invest in ${displayBase(selectedSymbol)}`
+                    : "Select a market first"}
           </Button>
 
           <div className="mt-4">
             <AdvancedDetails label="How this works">
               <p className="text-xs leading-relaxed text-white/55">
-                You approve a secure investment request with your own wallet. HATCH never holds your trading keys.
-                After relay, fill is confirmed only via SoDEX order history and user trades. Path A updates SoDEX vault
-                balances (vMAG7.ssi / vUSSI) — not the Base SSI website automatically.
+                Markets are discovered live from SoDEX. Empty, cancel-only, and maintenance books are skipped.
+                Fills are never inferred from relay HTTP.
               </p>
             </AdvancedDetails>
           </div>
         </SectionCard>
       </div>
-    </div>
-  );
-}
-
-function Row({ k, v }: { k: string; v: string }) {
-  return (
-    <div className="flex items-center justify-between gap-3 border-b border-white/5 py-2 last:border-0">
-      <span className="shrink-0 text-white/50">{k}</span>
-      <span className="break-all text-right font-medium text-white/90">{v}</span>
     </div>
   );
 }

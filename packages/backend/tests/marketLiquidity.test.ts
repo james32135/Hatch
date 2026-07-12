@@ -5,8 +5,22 @@ import {
   type MarketSnapshot,
 } from "../src/services/marketLiquidity.js";
 import type { SpotSymbolMeta } from "../src/services/sodexSymbols.js";
+import type { HatchProfile } from "../src/config/environment.js";
 
-function snap(partial: Partial<MarketSnapshot> & { symbol: string; marketId: number }): MarketSnapshot {
+const profile = {
+  id: "testnet",
+  chainId: 1,
+  writesAllowed: true,
+  sodexSpotRest: "",
+  sodexSpotWs: "",
+  sodexAppUrl: "",
+  valuechainRpc: "",
+  valuechainExplorer: "",
+} as HatchProfile;
+
+function snap(
+  partial: Partial<MarketSnapshot> & { symbol: string; marketId: number },
+): MarketSnapshot {
   const meta: SpotSymbolMeta = {
     id: partial.marketId,
     name: partial.symbol,
@@ -25,11 +39,13 @@ function snap(partial: Partial<MarketSnapshot> & { symbol: string; marketId: num
     base: "x",
     quote: "vUSDC",
     status: "TRADING",
+    lastPrice: partial.bestAsk ?? 0.4,
+    midPrice: partial.bestAsk ?? 0.4,
     bestBid: partial.bestBid ?? 0.4,
     bestAsk: partial.bestAsk ?? null,
     spread: null,
     spreadPct: partial.spreadPct ?? 0.01,
-    bidDepthLevels: 2,
+    bidDepthLevels: partial.bidDepthLevels ?? 2,
     askDepthLevels: partial.askDepthLevels ?? 0,
     bidDepthQty: 10,
     askDepthQty: partial.askDepthQty ?? 0,
@@ -44,23 +60,30 @@ function snap(partial: Partial<MarketSnapshot> & { symbol: string; marketId: num
     quantityPrecision: 2,
     supportsLimit: true,
     supportsIoc: true,
-    supportsMarket: true,
+    supportsMarket: false,
+    liquidityScore: partial.score ?? 10,
+    executionScore: partial.score ?? 10,
     score: partial.score ?? 10,
+    expectedSlippageBps: 10,
+    estimatedFillProbability: partial.executable ? 0.9 : 0,
     executable: partial.executable ?? false,
     rejectReasons: partial.rejectReasons ?? ["empty_asks"],
+    unavailableReason: partial.executable ? null : "Empty orderbook (asks)",
     meta,
     ...partial,
   } as MarketSnapshot;
 }
 
 describe("selectExecutionRoute", () => {
-  it("prefers MAG7 when executable for BALANCED", () => {
+  it("picks highest score with no preferred-symbol bias", () => {
     const markets = [
       snap({
         symbol: "vMAG7ssi_vUSDC",
         marketId: 3,
         bestAsk: 0.45,
+        bestBid: 0.449,
         askDepthLevels: 4,
+        bidDepthLevels: 4,
         askDepthUsd: 600,
         executable: true,
         rejectReasons: [],
@@ -70,7 +93,9 @@ describe("selectExecutionRoute", () => {
         symbol: "WSOSO_vUSDC",
         marketId: 4,
         bestAsk: 0.45,
+        bestBid: 0.449,
         askDepthLevels: 4,
+        bidDepthLevels: 4,
         askDepthUsd: 900,
         executable: true,
         rejectReasons: [],
@@ -78,32 +103,36 @@ describe("selectExecutionRoute", () => {
       }),
     ];
     const route = selectExecutionRoute({
-      riskTier: "BALANCED",
       notionalUsd: 6,
       maxSlippageBps: 50,
       markets,
+      profile,
     });
-    expect(route.market.symbol).toBe("vMAG7ssi_vUSDC");
-    expect(route.limitPrice).toBe("0.4523"); // 0.45 * 1.005
+    expect(route.market.symbol).toBe("WSOSO_vUSDC");
+    expect(route.limitPrice).toBe("0.4523");
   });
 
-  it("skips MAG7 with empty asks and routes to liquid market", () => {
+  it("honors parent-chosen market when executable", () => {
     const markets = [
       snap({
-        symbol: "vMAG7ssi_vUSDC",
-        marketId: 3,
-        bestAsk: null,
-        askDepthLevels: 0,
-        askDepthUsd: 0,
-        executable: false,
-        rejectReasons: ["empty_asks"],
-        score: 0,
+        symbol: "vBTC_vUSDC",
+        marketId: 1,
+        bestAsk: 64000,
+        bestBid: 63990,
+        askDepthLevels: 4,
+        bidDepthLevels: 4,
+        askDepthUsd: 2000,
+        executable: true,
+        rejectReasons: [],
+        score: 95,
       }),
       snap({
         symbol: "WSOSO_vUSDC",
         marketId: 4,
         bestAsk: 0.45,
+        bestBid: 0.449,
         askDepthLevels: 4,
+        bidDepthLevels: 4,
         askDepthUsd: 500,
         executable: true,
         rejectReasons: [],
@@ -111,19 +140,41 @@ describe("selectExecutionRoute", () => {
       }),
     ];
     const route = selectExecutionRoute({
-      riskTier: "BALANCED",
       notionalUsd: 6,
       maxSlippageBps: 50,
       markets,
+      profile,
+      chosenSymbol: "WSOSO_vUSDC",
     });
     expect(route.market.symbol).toBe("WSOSO_vUSDC");
-    expect(route.why).toMatch(/No preferred Path A/i);
+    expect(route.why).toMatch(/Parent selected/i);
+  });
+
+  it("rejects chosen market with empty asks", () => {
+    expect(() =>
+      selectExecutionRoute({
+        notionalUsd: 6,
+        maxSlippageBps: 50,
+        markets: [
+          snap({
+            symbol: "vMAG7ssi_vUSDC",
+            marketId: 3,
+            bestAsk: null,
+            askDepthLevels: 0,
+            askDepthUsd: 0,
+            executable: false,
+            rejectReasons: ["empty_asks"],
+          }),
+        ],
+        profile,
+        chosenSymbol: "vMAG7ssi_vUSDC",
+      }),
+    ).toThrow(/not executable/i);
   });
 
   it("throws when nothing is executable", () => {
     expect(() =>
       selectExecutionRoute({
-        riskTier: "BALANCED",
         notionalUsd: 6,
         maxSlippageBps: 50,
         markets: [
@@ -134,11 +185,12 @@ describe("selectExecutionRoute", () => {
             rejectReasons: ["empty_asks"],
           }),
         ],
+        profile,
       }),
     ).toThrow(/No executable/);
   });
 
-  it("preferred order for BALANCED starts with MAG7", () => {
-    expect(preferredSymbolOrder("BALANCED")[0]?.test("vMAG7ssi_vUSDC")).toBe(true);
+  it("preferredSymbolOrder is empty (no hardcoded preference)", () => {
+    expect(preferredSymbolOrder("BALANCED")).toEqual([]);
   });
 });

@@ -35,12 +35,9 @@ const signDraftSchema = z.object({
   network: z.enum(["mainnet", "testnet"]).optional(),
   nonce: z.union([z.string(), z.number()]).optional(),
   refreshAccountId: z.boolean().optional(),
-  mids: z
-    .object({
-      mag7: z.string().optional(),
-      ussi: z.string().optional(),
-    })
-    .optional(),
+  /** Parent-selected market from live discovery (required for invest UI). */
+  symbol: z.string().min(1).optional(),
+  marketId: z.number().int().positive().optional(),
 });
 
 export async function registerAllowanceRoutes(app: FastifyInstance): Promise<void> {
@@ -148,9 +145,17 @@ export async function registerAllowanceRoutes(app: FastifyInstance): Promise<voi
       const maxSlippageBps = policyRow?.maxSlippageBps ?? 50;
       const notionalUsd = Number(handoff.amountUsd);
 
+      if (!parsed.data.symbol && parsed.data.marketId == null) {
+        throw new HatchError(
+          "invalid_body",
+          "Select an executable market (symbol or marketId) from live discovery before signing",
+          400,
+        );
+      }
+
       let markets;
       try {
-        markets = await scanExecutableMarkets(profile);
+        markets = await scanExecutableMarkets(profile, { notionalUsd });
       } catch (e) {
         throw new HatchError(
           "unavailable",
@@ -162,18 +167,26 @@ export async function registerAllowanceRoutes(app: FastifyInstance): Promise<voi
       let route;
       try {
         route = selectExecutionRoute({
-          riskTier: handoff.riskTier,
           notionalUsd,
           maxSlippageBps,
           markets,
+          profile,
+          chosenSymbol: parsed.data.symbol,
+          chosenMarketId: parsed.data.marketId,
         });
       } catch (e: any) {
-        throw new HatchError(
-          e?.code === "no_executable_liquidity" || e?.code === "notional_too_small"
+        const code =
+          e?.code === "no_executable_liquidity" ||
+          e?.code === "notional_too_small" ||
+          e?.code === "market_not_executable"
             ? e.code
-            : "unavailable",
+            : "unavailable";
+        throw new HatchError(
+          code,
           e?.message || "No executable SoDEX market",
-          e?.code === "notional_too_small" ? 400 : 503,
+          e?.code === "notional_too_small" || e?.code === "market_not_executable"
+            ? 400
+            : 503,
           e?.details,
         );
       }
@@ -191,20 +204,25 @@ export async function registerAllowanceRoutes(app: FastifyInstance): Promise<voi
         accountID: resolved.accountID,
         accountIdSource: resolved.source,
         route: draft.route,
+        marketExecutionReport: route.report,
         marketScan: {
           scanned: markets.length,
-          executable: markets.filter((m) => m.executable).length,
-          top: markets.slice(0, 8).map((m) => ({
+          executable: route.report.available.length,
+          available: route.report.available.map((m) => ({
             symbol: m.symbol,
+            marketId: m.marketId,
+            base: m.base,
             score: m.score,
-            executable: m.executable,
             bestAsk: m.bestAsk,
             askDepthUsd: m.askDepthUsd,
-            rejectReasons: m.rejectReasons,
+            spreadPct: m.spreadPct,
+            estimatedFillProbability: m.estimatedFillProbability,
+            expectedSlippageBps: m.expectedSlippageBps,
           })),
+          unavailable: route.report.unavailable.slice(0, 40),
         },
         sizingNote: draft.sizingNote,
-        note: "UNSIGNED. Liquidity-aware route chosen from live SoDEX books. Sign typedData, then POST /api/sodex/relay.",
+        note: "UNSIGNED. Market chosen from live SoDEX discovery only. Sign typedData, then POST /api/sodex/relay.",
       };
     },
   );

@@ -29,6 +29,7 @@ import {
   verifySignedOrderAgainstSodex,
 } from "../services/orderFillVerify.js";
 import { enqueueJob } from "../jobs/queue.js";
+import { assertMarketStillExecutable } from "../services/marketLiquidity.js";
 
 const relaySchema = z.object({
   method: z.enum(["GET", "POST", "DELETE"]).default("POST"),
@@ -127,17 +128,32 @@ export async function registerSodexRoutes(app: FastifyInstance): Promise<void> {
     return { profile: profile.id, data };
   });
 
-  /** Live liquidity scan + suitability scores (official books only). */
+  /** Live market discovery: available vs unavailable (official books only). */
   app.get("/api/sodex/markets/executable", async (req) => {
     const profile = profileFromRequest(req);
-    const { scanExecutableMarkets } = await import("../services/marketLiquidity.js");
-    const markets = await scanExecutableMarkets(profile);
+    const q = req.query as { notionalUsd?: string };
+    const notionalUsd = q.notionalUsd ? Number(q.notionalUsd) : 0;
+    const {
+      scanExecutableMarkets,
+      buildMarketExecutionReport,
+    } = await import("../services/marketLiquidity.js");
+    const markets = await scanExecutableMarkets(profile, {
+      notionalUsd: Number.isFinite(notionalUsd) ? notionalUsd : 0,
+    });
+    const report = buildMarketExecutionReport({
+      markets,
+      profile,
+      notionalUsd: Number.isFinite(notionalUsd) && notionalUsd > 0 ? notionalUsd : 5,
+    });
     return {
       profile: profile.id,
-      scannedAt: new Date().toISOString(),
-      scanned: markets.length,
-      executable: markets.filter((m) => m.executable).length,
+      scannedAt: report.scannedAt,
+      scanned: report.scanned,
+      executable: report.available.length,
+      available: report.available,
+      unavailable: report.unavailable,
       markets,
+      report,
     };
   });
 
@@ -278,6 +294,36 @@ export async function registerSodexRoutes(app: FastifyInstance): Promise<void> {
         assertMainnetTestGuard(profile.id, notional, "sodex_relay_eng_wallet");
       }
 
+      // Fresh live check — never relay into a book that went empty/blocked since sign-draft
+      const notionalGuess = estimateNotionalUsd(parsed.data.body) ?? 0;
+      if (parsed.data.symbolName) {
+        try {
+          await assertMarketStillExecutable({
+            profile,
+            symbol: parsed.data.symbolName,
+            notionalUsd: Math.max(notionalGuess, 1),
+          });
+        } catch (e: any) {
+          throw new HatchError(
+            e?.code === "market_not_executable" || e?.code === "notional_too_small"
+              ? e.code
+              : "market_not_executable",
+            e?.message || "Market no longer executable",
+            409,
+          );
+        }
+      }
+
+      // Snapshot balances before relay for fill evidence (balance-delta check)
+      let balancesBefore: unknown = null;
+      try {
+        balancesBefore = await createSodexClient(profile).accountBalances(
+          req.user.wallet,
+        );
+      } catch {
+        balancesBefore = null;
+      }
+
       const prisma = getPrisma();
       const envEnum =
         profile.id === "testnet"
@@ -303,9 +349,11 @@ export async function registerSodexRoutes(app: FastifyInstance): Promise<void> {
             nonce: parsed.data.apiNonce,
             signature: wireApiSign,
             status: "PENDING",
-            sodexResponseJson: parsed.data.route
-              ? ({ routeEvidence: parsed.data.route } as object)
-              : undefined,
+            sodexResponseJson: {
+              ...(parsed.data.route ? { routeEvidence: parsed.data.route } : {}),
+              balancesBefore,
+              balancesBeforeAt: new Date().toISOString(),
+            } as object,
           },
         });
         orderId = row.id;

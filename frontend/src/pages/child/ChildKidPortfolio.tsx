@@ -38,7 +38,7 @@ export default function ChildKidPortfolio() {
     return (
       <Unavailable
         title="Waiting for live prices"
-        detail="Your portfolio will appear from your parent's live SoDEX account after the first investment."
+        detail="The read-only family spot account will appear when your parent's SoDEX balances can be valued."
       />
     );
   }
@@ -46,7 +46,7 @@ export default function ChildKidPortfolio() {
   return (
     <div className="space-y-6">
       <div>
-        <div className="text-xs uppercase tracking-widest text-white/40">Total</div>
+        <div className="text-xs uppercase tracking-widest text-white/40">Family spot trading value</div>
         <div className="mt-2">
           <PortfolioBalanceHero
             portfolio={p.data}
@@ -54,12 +54,14 @@ export default function ChildKidPortfolio() {
             className="text-5xl font-medium tracking-tight"
           />
         </div>
-        <p className="mt-2 text-xs text-white/40">Read-only · parent SoDEX balances</p>
+        <p className="mt-2 text-xs text-white/40">
+          Managed by parent · read-only family account · not allocated child assets
+        </p>
       </div>
 
       {alloc.length > 0 && (
         <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-6">
-          <div className="mb-3 text-sm text-white/60">What you own</div>
+          <div className="mb-3 text-sm text-white/60">Estimated family spot mix</div>
           <div className="h-40">
             <ResponsiveContainer>
               <PieChart>
@@ -87,7 +89,7 @@ export default function ChildKidPortfolio() {
 
       {holdings.length > 0 && (
         <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-6">
-          <div className="mb-3 text-sm text-white/60">Details</div>
+          <div className="mb-3 text-sm text-white/60">Family spot holdings</div>
           <div className="space-y-2 text-sm">
             {holdings.map((h: any, i: number) => {
               const usd = h.usdValue ?? h.valueUsd;

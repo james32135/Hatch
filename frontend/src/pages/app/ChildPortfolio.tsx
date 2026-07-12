@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { SectionCard } from "@/components/common/SectionCard";
 import { Unavailable } from "@/components/common/Unavailable";
-import { fmtUsd, fmtPct } from "@/lib/format";
+import { fmtUsd } from "@/lib/format";
 import {
   resolveLivePortfolioUsd,
   allocationSlices,
@@ -15,7 +15,7 @@ import { TokenMark, tokenColor } from "@/lib/tokenIcons";
 import { PortfolioBalanceHero } from "@/components/story/PortfolioBalanceHero";
 import { InvestmentReceipt } from "@/components/story/InvestmentReceipt";
 import { motion } from "framer-motion";
-import { LineChart, Line, ResponsiveContainer, XAxis, YAxis, Tooltip, PieChart, Pie, Cell } from "recharts";
+import { ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 
 export default function ChildPortfolio() {
   const { childId } = useParams();
@@ -24,11 +24,6 @@ export default function ChildPortfolio() {
     queryFn: () => api.get<any>(`/api/portfolio/${childId}`),
     enabled: !!childId,
     refetchInterval: 15_000,
-  });
-  const hist = useQuery({
-    queryKey: ["portfolio-hist", childId],
-    queryFn: () => api.get<any>(`/api/portfolio/${childId}/history?limit=60`),
-    enabled: !!childId,
   });
   const tx = useQuery({
     queryKey: ["portfolio-tx", childId],
@@ -47,10 +42,6 @@ export default function ChildPortfolio() {
     symbol: a.name,
     value: a.value > 0 && a.value <= 1 ? a.value * 100 : a.value,
   }));
-  const series = (hist.data?.history || hist.data || []).map((h: any) => ({
-    t: h.at || h.timestamp,
-    v: Number(h.totalUsd ?? h.value ?? 0),
-  }));
   const sodexError = p.data?.sodexError;
   const warnings: string[] = p.data?.projection?.warnings || p.data?.warnings || [];
   const txs = tx.data?.transactions || p.data?.transactions || [];
@@ -60,51 +51,33 @@ export default function ChildPortfolio() {
     <div className="grid gap-4 lg:grid-cols-3">
       <SectionCard
         className="lg:col-span-2"
-        title="Growing with them"
+        title="Family SoDEX spot account"
         subtitle={
           sodexError
             ? "Live SoDEX refresh failed. Snapshot is never shown as live."
             : fresh.live
-              ? "Live portfolio from SoDEX · shared family trading account"
-              : "Waiting for a live SoDEX read"
+              ? "Parent-owned · managed by parent · read-only in child view"
+              : "Waiting for a live family-account read"
         }
       >
         <PortfolioBalanceHero portfolio={p.data} loading={p.isLoading} />
-        {totalUsd != null && p.data?.performance?.pnlPct != null && (
-          <div
-            className={`mt-1 text-sm ${Number(p.data.performance.pnlPct) >= 0 ? "text-[hsl(142_71%_55%)]" : "text-[hsl(350_89%_65%)]"}`}
-          >
-            {fmtPct(p.data.performance.pnlPct, { sign: true })} since they started
+        <p className="mt-2 text-xs text-white/40">
+          Spot trading value only. This is not an allocated balance for {p.data?.child?.displayName || "the child"}.
+        </p>
+        {warnings.length > 0 && (
+          <div className="mt-2 text-xs text-amber-200/75">
+            Some family holdings are excluded because no live asset price is available.
           </div>
         )}
-        {warnings.length > 0 && (
-          <div className="mt-2 text-xs text-white/40">{warnings.slice(0, 2).join(" · ")}</div>
-        )}
-        <div className="mt-6 h-40">
-          {series.length > 1 ? (
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={series}>
-                <XAxis dataKey="t" hide />
-                <YAxis hide domain={["auto", "auto"]} />
-                <Tooltip
-                  contentStyle={{ background: "#0a0a0a", border: "1px solid rgba(255,255,255,0.1)", fontSize: 12 }}
-                />
-                <Line type="monotone" dataKey="v" stroke="#7dd3fc" strokeWidth={2} dot={false} />
-              </LineChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="text-xs text-white/40">History appears after their first investment.</div>
-          )}
-        </div>
       </SectionCard>
 
-      <SectionCard title="Mix">
+      <SectionCard title="Estimated family spot mix">
         {alloc.length === 0 ? (
           <Unavailable
             title="No mix yet"
             detail={
               totalUsd === 0
-                ? "Invest from Allowance to build their first allocation."
+                ? "Approve a plan trade to add exposure to the family spot account."
                 : fresh.waitingPricing || fresh.waitingSsi
                   ? "Waiting for live prices"
                   : "Waiting for priced holdings."
@@ -138,7 +111,11 @@ export default function ChildPortfolio() {
         )}
       </SectionCard>
 
-      <SectionCard className="lg:col-span-3" title="Holdings">
+      <SectionCard
+        className="lg:col-span-3"
+        title="Family spot holdings"
+        subtitle="Balances belong to the parent's shared SoDEX account."
+      >
         {holdings.length === 0 ? (
           <Unavailable
             detail={
@@ -184,14 +161,18 @@ export default function ChildPortfolio() {
         )}
         {staking && (
           <p className="mt-3 text-xs text-white/40">
-            Base SSI staking is read separately and is not invented into the SoDEX total.
+            Base SSI staking is parent-owned, read separately, and excluded from this spot trading value.
           </p>
         )}
       </SectionCard>
 
-      <SectionCard className="lg:col-span-3" title="Investment timeline" subtitle="Order ID · status · explorers · receipt">
+      <SectionCard
+        className="lg:col-span-3"
+        title="Child plan activity"
+        subtitle="Orders attributed to this child's plan. Filled assets remain in the parent-owned family account."
+      >
         {txs.length === 0 ? (
-          <div className="text-sm text-white/50">No investments yet.</div>
+          <div className="text-sm text-white/50">No orders attributed to this child&apos;s plan yet.</div>
         ) : (
           <div className="relative space-y-0 pl-2">
             {txs.slice(0, 20).map((t: any, i: number) => (

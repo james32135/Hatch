@@ -65,7 +65,7 @@ export default function Landing() {
             initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.15 }}
             className="mt-6 max-w-xl text-base text-white/60 md:text-lg"
           >
-            Set a weekly allowance. HATCH invests it automatically. Your child learns from real markets in plain language.
+            Set a weekly allowance plan. Parent-approved trades enter the shared family account, and your child learns from real markets in plain language.
           </motion.p>
           <motion.div
             initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.25 }}
@@ -174,8 +174,8 @@ export default function Landing() {
             {[
               { icon: Lock, t: "You stay in control", d: "Every investment needs your wallet approval. HATCH never holds your funds." },
               { icon: Zap, t: "Weekly on autopilot", d: "Approve once a week. Investing happens in seconds." },
-              { icon: LineChart, t: "Real market exposure", d: "Diversified index baskets your child can grow with." },
-              { icon: GraduationCap, t: "Lessons that stick", d: "AI turns portfolio moves into short, clear explanations." },
+              { icon: LineChart, t: "Real market exposure", d: "Diversified assets in the parent-managed family account." },
+              { icon: GraduationCap, t: "Lessons that stick", d: "AI turns family-account moves into short, clear explanations." },
               { icon: ShieldCheck, t: "Independently verifiable", d: "Important actions are recorded so you can verify what happened." },
               { icon: Baby, t: "Kid-safe view", d: "Children can look and learn. They cannot move money." },
             ].map((f, i) => (
@@ -217,7 +217,7 @@ export default function Landing() {
             initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
             className="text-4xl font-medium tracking-tight md:text-6xl"
           >
-            Start their portfolio<br /><span className="text-white/50">this week.</span>
+            Start a family investing plan<br /><span className="text-white/50">this week.</span>
           </motion.h2>
           <p className="mx-auto mt-6 max-w-md text-sm text-white/60">Two minutes to onboard. One signature per allowance. A lifetime of compounding.</p>
           <div className="mt-8 flex justify-center gap-3">
@@ -395,7 +395,7 @@ function FlowDiagram() {
   const steps = [
     { l: "You approve", s: "Confirm in your wallet" },
     { l: "HATCH invests", s: "Places the order for you" },
-    { l: "Portfolio updates", s: "Their holdings grow" },
+    { l: "Family account updates", s: "Parent-owned holdings change" },
     { l: "Lessons arrive", s: "Plain-language explanations" },
   ];
   return (

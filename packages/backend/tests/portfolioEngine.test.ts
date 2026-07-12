@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   buildHoldings,
-  computePerformance,
   snapshotsToHistory,
 } from "../src/services/portfolioEngine.js";
 import type { PortfolioProjection } from "../src/services/portfolioProjection.js";
@@ -15,35 +14,16 @@ describe("portfolio engine", () => {
         { symbol: "vUSSI", qty: 60, priceUsd: 1, valueUsd: 60 },
       ],
       source: "sosovalue+sodex",
+      valuationMethod: "sodex_last_trade",
+      valuationScope: "spot_trading_value",
       pricedAt: new Date().toISOString(),
       warnings: [],
+      diagnostics: [],
     };
     const h = buildHoldings(projection);
     expect(h).toHaveLength(2);
     expect(h[0]?.allocationPct).toBe(40);
     expect(h[1]?.allocationPct).toBe(60);
-  });
-
-  it("computes P/L from first snapshot cost basis", () => {
-    const perf = computePerformance({
-      currentUsd: 120,
-      snapshots: [{ totalUsd: 100 }, { totalUsd: 110 }],
-      allowanceSumUsd: 50,
-    });
-    expect(perf.costBasisSource).toBe("first_snapshot");
-    expect(perf.costBasisUsd).toBe(100);
-    expect(perf.pnlUsd).toBe(20);
-    expect(perf.pnlPct).toBe(20);
-  });
-
-  it("falls back to allowance sum", () => {
-    const perf = computePerformance({
-      currentUsd: 80,
-      snapshots: [{ totalUsd: null }],
-      allowanceSumUsd: 70,
-    });
-    expect(perf.costBasisSource).toBe("allowance_sum");
-    expect(perf.pnlUsd).toBe(10);
   });
 
   it("maps snapshot history", () => {

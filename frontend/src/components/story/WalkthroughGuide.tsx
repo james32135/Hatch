@@ -31,14 +31,14 @@ const STEPS = [
   {
     id: "trade",
     title: "Watch the trade land",
-    body: "Orders go to SoDEX. Their portfolio updates with real holdings.",
+    body: "Orders go to SoDEX. The parent-owned family spot account updates with real holdings.",
     to: "/app",
     cta: "Back home",
   },
   {
     id: "lesson",
     title: "Read the lesson",
-    body: "Short explanations tied to what actually changed in the portfolio.",
+    body: "Short explanations tied to what changed in the family account.",
     to: "/app/children",
     cta: "Open children",
   },

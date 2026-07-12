@@ -35,7 +35,7 @@ export interface PortfolioPerformance {
   costBasisUsd: number | null;
   pnlUsd: number | null;
   pnlPct: number | null;
-  costBasisSource: "first_snapshot" | "allowance_sum" | "none";
+  costBasisSource: "none";
 }
 
 export interface HistoryPoint {
@@ -61,39 +61,6 @@ export function buildHoldings(
         ? (c.valueUsd / total) * 100
         : null,
   }));
-}
-
-export function computePerformance(input: {
-  currentUsd: number | null;
-  snapshots: Array<{ totalUsd: { toString(): string } | number | null }>;
-  allowanceSumUsd: number;
-}): PortfolioPerformance {
-  let costBasisUsd: number | null = null;
-  let costBasisSource: PortfolioPerformance["costBasisSource"] = "none";
-
-  for (const s of input.snapshots) {
-    if (s.totalUsd === null || s.totalUsd === undefined) continue;
-    const n = Number(s.totalUsd.toString());
-    if (Number.isFinite(n) && n > 0) {
-      costBasisUsd = n;
-      costBasisSource = "first_snapshot";
-      break;
-    }
-  }
-  if (costBasisUsd === null && input.allowanceSumUsd > 0) {
-    costBasisUsd = input.allowanceSumUsd;
-    costBasisSource = "allowance_sum";
-  }
-
-  const currentUsd = input.currentUsd;
-  let pnlUsd: number | null = null;
-  let pnlPct: number | null = null;
-  if (currentUsd !== null && costBasisUsd !== null) {
-    pnlUsd = currentUsd - costBasisUsd;
-    pnlPct = costBasisUsd !== 0 ? (pnlUsd / costBasisUsd) * 100 : null;
-  }
-
-  return { currentUsd, costBasisUsd, pnlUsd, pnlPct, costBasisSource };
 }
 
 export function snapshotsToHistory(
@@ -220,26 +187,23 @@ export async function buildPortfolioEngineView(input: {
     orderBy: { createdAt: "asc" },
     take: 500,
   });
-  const allowances = await prisma.allowancePolicy.findMany({
-    where: { childId: input.childId },
-  });
-  const allowanceSumUsd = allowances.reduce(
-    (s, a) => s + Number(a.amountUsd.toString()),
-    0,
-  );
-
-  const performance = computePerformance({
+  // Live balances are the parent's shared SoDEX spot account. A child-specific
+  // cost basis/PnL cannot be derived from child allowance settings or snapshots,
+  // because neither is a segregated allocation ledger.
+  const performance: PortfolioPerformance = {
     currentUsd: projection?.totalUsd ?? null,
-    snapshots,
-    allowanceSumUsd,
-  });
+    costBasisUsd: null,
+    pnlUsd: null,
+    pnlPct: null,
+    costBasisSource: "none",
+  };
 
   const history = snapshotsToHistory(snapshots);
 
   const transactions = await prisma.signedOrder.findMany({
-    where: {
-      OR: [{ childId: input.childId }, { parentId: input.parentId }],
-    },
+    // Order attribution is child-specific; resulting assets remain in the
+    // parent's shared account and are not proof of child ownership.
+    where: { childId: input.childId, parentId: input.parentId },
     orderBy: { createdAt: "desc" },
     take: 50,
     select: {

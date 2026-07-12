@@ -29,6 +29,7 @@ export default function ChildProjections() {
       return api.post<any>("/api/projections/scenarios", {
         childId,
         years: 10,
+        startingUsd: 0,
         weeklyAllowanceUsd: weekly,
         monthlyAllowanceUsd: weekly * 4,
       });
@@ -101,7 +102,7 @@ export default function ChildProjections() {
   return (
     <div className="space-y-4">
       <SectionCard
-        title="What consistency can look like"
+        title="Child-specific educational projection"
         subtitle={
           weekly != null && weekly > 0
             ? `If you keep investing about ${fmtUsd(weekly)} every week…`
@@ -110,7 +111,8 @@ export default function ChildProjections() {
       >
         <p className="text-sm leading-relaxed text-white/60">
           These are teaching scenarios based on documented assumption bands: not promises, not live yields, and not
-          financial advice.
+          financial advice. They start at $0 because HATCH has no child allocation ledger; the family SoDEX balance is
+          never treated as the child&apos;s principal.
         </p>
         {assumptions.data && (
           <div className="mt-4 grid gap-2 sm:grid-cols-3 text-sm">
@@ -125,7 +127,7 @@ export default function ChildProjections() {
       </SectionCard>
 
       <SectionCard
-        title="10-year story"
+        title="10-year allowance scenario"
         subtitle={weekly != null && weekly > 0 ? `Weekly input: ${fmtUsd(weekly)}` : "Needs a weekly allowance"}
         action={
           <Button

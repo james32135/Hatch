@@ -44,14 +44,17 @@ export function PortfolioBalanceHero({
         <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-white/40">
           <span className="inline-flex items-center gap-1.5">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-            Live from SoDEX
+            Family SoDEX spot account
           </span>
+          {portfolio?.valuation?.method === "sodex_asset_price" && (
+            <span>· Official SoDEX asset prices</span>
+          )}
           {fresh.pricedAt && <span>Priced {fmtDate(fresh.pricedAt)}</span>}
-          {fresh.sharedAccount && <span>· Shared family trading account</span>}
+          {fresh.sharedAccount && <span>· Managed by parent</span>}
         </div>
         {partialUnpriced && (
           <p className="mt-2 text-xs text-amber-200/80">
-            Some holdings are not priced yet — totals exclude unpriced assets.
+            Some family holdings are not priced yet — the spot value excludes them.
           </p>
         )}
       </div>

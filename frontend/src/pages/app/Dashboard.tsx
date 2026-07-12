@@ -102,7 +102,7 @@ export default function Dashboard() {
             <br className="hidden sm:block" /> build their future automatically.
           </h2>
           <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-white/60">
-            Add your child, set a weekly allowance, and HATCH invests it for them while they learn how money grows.
+            Add your child, set a weekly allowance plan, and approve trades into the family account while they learn how money grows.
           </p>
           <Button className="mt-8 bg-white text-black hover:bg-white/90" onClick={() => nav("/app/onboarding")}>
             <Plus className="mr-1.5 h-4 w-4" /> Add your first child
@@ -125,7 +125,7 @@ export default function Dashboard() {
         : "Waiting for first investment"
       : totalUsd === 0
         ? "Waiting for first investment"
-        : "Family trading account · live SoDEX";
+        : "Parent-owned family spot account · live SoDEX";
   const policies = allowances.data?.policies || [];
   const nextPolicy = policies
     .filter((p: any) => !p.paused && p.nextDueAt)
@@ -139,7 +139,7 @@ export default function Dashboard() {
   } else if (sodex.data && sodex.data.nextStep !== "READY") {
     suggested = { label: "Finish trading setup", to: "/app/sodex" };
   } else if (children[0]) {
-    suggested = { label: `Open ${children[0].displayName}'s portfolio`, to: `/app/children/${children[0].id}` };
+    suggested = { label: `Open ${children[0].displayName}'s plan`, to: `/app/children/${children[0].id}` };
   }
 
   return (
@@ -164,7 +164,7 @@ export default function Dashboard() {
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <OutcomeTile
-          label="Invested so far"
+          label="Family spot account"
           value={totalUsd == null ? "-" : fmtUsd(totalUsd)}
           hint={investedHint}
           icon={TrendingUp}
@@ -204,9 +204,7 @@ export default function Dashboard() {
 
       <div className="grid gap-4 lg:grid-cols-2">
         {children.map((c: any, i: number) => {
-          // Shared SoDEX — same live family total on every card (header is not summed).
-          const total = totalUsd;
-          const waiting = total == null && (familyFresh.waitingSsi || !!familyPortfolio.data?.sodexError);
+          const childPolicy = policies.find((p: any) => p.childId === c.id);
           return (
             <motion.div
               key={c.id}
@@ -227,16 +225,16 @@ export default function Dashboard() {
                   </div>
                   {c.paused && <StatusPip tone="warn" label="Paused" />}
                 </div>
-                <div className="mt-5 text-3xl font-medium tracking-tight">{total == null ? "-" : fmtUsd(total)}</div>
+                <div className="mt-5 text-3xl font-medium tracking-tight">
+                  {childPolicy ? fmtUsd(childPolicy.amountUsd) : "—"}
+                </div>
                 <div className="mt-1 text-xs text-white/45">
-                  {waiting
-                    ? "Waiting for live prices"
-                    : total === 0
-                      ? "Ready for their first investment"
-                      : "Shared family account · live SoDEX"}
+                  {childPolicy
+                    ? `Child-specific allowance · every ${childPolicy.cadenceDays} days`
+                    : "No child-specific allowance yet"}
                 </div>
                 <div className="mt-4 flex items-center gap-1.5 text-xs text-white/50 group-hover:text-white">
-                  View portfolio <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
+                  View plan & family account <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
                 </div>
               </Link>
             </motion.div>
@@ -249,7 +247,7 @@ export default function Dashboard() {
           {policies.length === 0 ? (
             <EmptyState
               title="No allowance yet"
-              detail="Set a weekly amount and HATCH invests it automatically."
+              detail="Set a child-specific weekly plan for parent-approved family-account trades."
               actionLabel="Set allowance"
               onAction={() => nav(`/app/children/${children[0].id}/allowance`)}
             />
@@ -285,7 +283,7 @@ export default function Dashboard() {
               <div className="min-w-0 flex-1">
                 <div className="text-xs text-white/45">Latest lesson</div>
                 <div className="truncate font-medium text-white/90">
-                  {latestLesson ? friendlyLessonTitle(latestLesson) : "Generate a lesson from their portfolio"}
+                  {latestLesson ? friendlyLessonTitle(latestLesson) : "Generate a lesson from family-account activity"}
                 </div>
               </div>
               {children[0] && (

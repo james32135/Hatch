@@ -101,11 +101,11 @@ export function friendlyLessonTitle(lesson: {
 
   switch (lesson.kind) {
     case "portfolio_delta":
-      return "What changed in their portfolio";
+      return "What changed in the family account";
     case "weekly_digest":
       return "This week's investing story";
     default:
-      return "A short lesson from their investments";
+      return "A short lesson from family-account activity";
   }
 }
 

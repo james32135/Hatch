@@ -19,7 +19,7 @@ const QUICK_PROMPTS = [
   "Why wasn't my last order filled?",
   "What should I invest in with $10?",
   "Show today's market summary",
-  "Explain my portfolio",
+  "Explain the family portfolio",
   "Which market has the best ask liquidity?",
   "Compare MAG7 vs USSI liquidity",
 ] as const;
@@ -218,7 +218,7 @@ export async function buildAgentContext(input: {
       : "MAG7: not listed",
     `Top markets JSON: ${JSON.stringify(marketsTop)}`,
     portfolio
-      ? `Portfolio JSON (official-sourced): ${JSON.stringify({
+      ? `FAMILY SPOT ACCOUNT JSON (parent-owned; never call this the child's portfolio): ${JSON.stringify({
           holdings: (portfolio as { holdings?: unknown }).holdings,
           performance: (portfolio as { performance?: unknown }).performance,
           allocation: (portfolio as { allocation?: unknown }).allocation,
@@ -254,6 +254,8 @@ Rules:
 - If MAG7/USSI has empty asks, say so and point to executable alternatives from the scan.
 - Path A = SoDEX vault tokens on ValueChain. Base SSI site does not auto-update from Path A fills.
 - Prefer executable markets. Cite which source you used.
+- Portfolio context is the parent's shared family SoDEX spot account. Never describe it as child-owned or allocated.
+- childId attributes the allowance plan, orders, and lessons only; HATCH has no child allocation ledger.
 - Be concise — lead with the answer, then evidence. Target under 250 words unless comparing many options.
 
 Response shape for recommendations (markdown):

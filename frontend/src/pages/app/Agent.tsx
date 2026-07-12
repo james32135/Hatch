@@ -48,7 +48,7 @@ const GROUPS: { id: string; label: string; prompts: string[] }[] = [
     id: "portfolio",
     label: "Portfolio",
     prompts: [
-      "Explain my portfolio",
+      "Explain the family portfolio",
       "Explain my last trade",
       "Why wasn't my last order filled?",
       "Risk report",
@@ -336,7 +336,7 @@ export default function Agent() {
     : markets.data?.markets?.filter((m: any) => m.executable).slice(0, 5) || [];
 
   const holdings = portfolio.data?.holdings || [];
-  const totalUsd = portfolio.data?.totalUsd ?? portfolio.data?.performance?.currentUsd;
+  const totalUsd = portfolio.data?.familySpotTotalUsd ?? portfolio.data?.projection?.totalUsd;
   const empty = messages.length === 0;
 
   return (
@@ -508,12 +508,14 @@ export default function Agent() {
 
                 <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 pb-6">
                   <section>
-                    <h3 className="mb-2 text-[11px] text-white/40">Portfolio</h3>
+                    <h3 className="mb-2 text-[11px] text-white/40">Family SoDEX spot account</h3>
                     <div className="rounded-2xl border border-white/[0.07] bg-white/[0.025] p-3.5">
                       <div className="font-mono text-xl tracking-tight text-white">
                         {totalUsd != null ? fmtUsd(totalUsd) : "—"}
                       </div>
-                      <p className="mt-1 text-[11px] text-white/30">Live SoDEX balances</p>
+                      <p className="mt-1 text-[11px] text-white/30">
+                        Parent-owned · not allocated by child
+                      </p>
                       <div className="mt-3 space-y-2">
                         {holdings.slice(0, 4).map((h: any) => (
                           <div
@@ -604,7 +606,9 @@ export default function Agent() {
               <div className="mb-4 font-mono text-2xl text-white">
                 {totalUsd != null ? fmtUsd(totalUsd) : "—"}
               </div>
-              <p className="mb-4 text-xs text-white/35">Live SoDEX portfolio</p>
+              <p className="mb-4 text-xs text-white/35">
+                Parent-owned family SoDEX spot account
+              </p>
               <div className="space-y-2">
                 {board.slice(0, 5).map((m: any) => (
                   <div

@@ -1,12 +1,12 @@
 import { motion } from "framer-motion";
 
-/** Animated SVG product story: Parent → Allowance → SoDEX → Portfolio → Lesson → ValueChain */
+/** Animated SVG product story: Parent → Allowance → SoDEX → Family account → Lesson → ValueChain */
 export function ProductFlowSvg({ className = "" }: { className?: string }) {
   const nodes = [
     { x: 60, label: "Parent", sub: "Approves" },
     { x: 200, label: "Allowance", sub: "Weekly plan" },
     { x: 340, label: "SoDEX", sub: "Real trade" },
-    { x: 480, label: "Portfolio", sub: "Updates" },
+    { x: 480, label: "Family acct.", sub: "Updates" },
     { x: 620, label: "Lesson", sub: "AI explains" },
     { x: 760, label: "ValueChain", sub: "Recorded" },
   ];

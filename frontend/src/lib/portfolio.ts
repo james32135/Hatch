@@ -24,7 +24,11 @@ function finiteNum(v: unknown): number | null {
 export function resolveLivePortfolioUsd(p: any): number | null {
   if (!p) return null;
   if (p.sodexError && !p.projection) return null;
-  for (const c of [p.performance?.currentUsd, p.projection?.totalUsd]) {
+  for (const c of [
+    p.familySpotTotalUsd,
+    p.projection?.totalUsd,
+    p.liveTotalUsd,
+  ]) {
     const n = finiteNum(c);
     if (n != null) return n;
   }

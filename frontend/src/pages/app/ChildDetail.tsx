@@ -33,7 +33,7 @@ export default function ChildDetail() {
   const snapshot = useMutation({
     mutationFn: () => api.post<any>(`/api/portfolio/${childId}/snapshot`, {}),
     onSuccess: () => {
-      toast.success("Portfolio refreshed");
+      toast.success("Family spot account refreshed");
       qc.invalidateQueries({ queryKey: ["portfolio", childId] });
     },
     onError: (e: any) => toast.error(e?.message || "Couldn't refresh"),
@@ -68,7 +68,7 @@ export default function ChildDetail() {
         </div>
         <div className="flex items-center gap-3">
           <div className="text-right">
-            <div className="text-xs text-white/45">Portfolio</div>
+            <div className="text-xs text-white/45">Family spot account</div>
             <div className="text-xl font-medium">
               {(() => {
                 const live = resolveLivePortfolioUsd(portfolio.data);
@@ -82,7 +82,7 @@ export default function ChildDetail() {
             </div>
             <div className="text-[10px] text-white/35">
               {portfolioFreshness(portfolio.data).live
-                ? "Live SoDEX"
+                ? "Parent-owned · live SoDEX"
                 : portfolio.data?.snapshotTotalUsd != null || portfolio.data?.latestSnapshot
                   ? "Last known · not live"
                   : "Not live"}
@@ -105,7 +105,7 @@ export default function ChildDetail() {
           Overview
         </NavLink>
         <NavLink to={`/app/children/${childId}/portfolio`} className={tabCls}>
-          Portfolio
+          Family account
         </NavLink>
         <NavLink to={`/app/children/${childId}/allowance`} className={tabCls}>
           Allowance

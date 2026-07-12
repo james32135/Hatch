@@ -452,7 +452,7 @@ export default function ChildAllowance() {
                     rel="noreferrer"
                     className="inline-flex items-center gap-1 text-sky-200/80 hover:text-sky-100"
                   >
-                    SoDEX portfolio <ExternalLink className="h-3 w-3" />
+                    Parent SoDEX family account <ExternalLink className="h-3 w-3" />
                   </a>
                 )}
               </div>

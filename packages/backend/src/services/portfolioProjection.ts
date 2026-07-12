@@ -1,6 +1,7 @@
 /**
- * Portfolio USD projection from SoSoValue (when available) + SoDEX tickers/account state.
- * SoDEX tickers are the live fallback when SoSoValue snapshot is down.
+ * Parent-owned SoDEX spot-account valuation.
+ * Uses the same SoDEX asset-price feed as the official portfolio UI, with
+ * SoSoValue and SoDEX last-trade prices only as fallback coverage.
  * Empty balances → totalUsd: 0 (not null).
  */
 import { getSoSoValueClient } from "../clients/sosovalue.js";
@@ -13,9 +14,16 @@ export interface PortfolioProjection {
     priceUsd: number | null;
     valueUsd: number | null;
   }>;
-  source: "sosovalue+sodex" | "sodex";
+  source:
+    | "sodex-asset-prices"
+    | "sodex-asset-prices+sosovalue"
+    | "sosovalue+sodex"
+    | "sodex";
+  valuationMethod: "sodex_asset_price" | "sodex_last_trade";
+  valuationScope: "spot_trading_value";
   pricedAt: string;
   warnings: string[];
+  diagnostics: string[];
 }
 
 function asNumber(v: unknown): number | null {
@@ -170,6 +178,38 @@ export function extractPrices(snapshot: unknown): Record<string, number> {
   return prices;
 }
 
+/** Official SoDEX portfolio UI asset-price rows from GET /bolt/coins. */
+export function extractSodexAssetPrices(payload: unknown): Record<string, number> {
+  const prices: Record<string, number> = {};
+  const rows = Array.isArray((payload as { data?: unknown })?.data)
+    ? ((payload as { data: unknown[] }).data)
+    : Array.isArray(payload)
+      ? payload
+      : [];
+  for (const item of rows) {
+    if (!item || typeof item !== "object") continue;
+    const row = item as Record<string, unknown>;
+    const symbol = String(row.name ?? row.symbol ?? "").trim();
+    const price = asNumber(row.price ?? row.usdPrice);
+    if (!symbol || price === null || price < 0) continue;
+    prices[symbol] = price;
+    prices[symbol.toUpperCase()] = price;
+  }
+  return prices;
+}
+
+async function loadSodexAssetPrices(profileId?: string | null): Promise<Record<string, number>> {
+  const { resolveProfile } = await import("../config/environment.js");
+  const { getEnv } = await import("../config/env.js");
+  const profile = resolveProfile(profileId ?? getEnv().HATCH_DEFAULT_PROFILE);
+  const gateway = new URL(profile.sodexSpotRest).origin;
+  const res = await fetch(`${gateway}/bolt/coins`, {
+    headers: { accept: "application/json" },
+  });
+  if (!res.ok) throw new Error(`SoDEX asset prices ${res.status}`);
+  return extractSodexAssetPrices(await res.json());
+}
+
 /** Match vault / index symbols to SoSoValue tickers without inventing prices */
 export function resolvePriceUsd(
   symbol: string,
@@ -248,15 +288,29 @@ export async function projectPortfolioUsd(
   profileId?: string | null,
 ): Promise<PortfolioProjection> {
   const warnings: string[] = [];
+  const diagnostics: string[] = [];
   let snapshotOk = false;
-  const prices = extractPrices(null);
+  let officialPricesOk = false;
+  const prices: Record<string, number> = {};
+
+  try {
+    Object.assign(prices, await loadSodexAssetPrices(profileId));
+    officialPricesOk = Object.keys(prices).length > 0;
+  } catch (err) {
+    diagnostics.push(
+      `SoDEX asset prices unavailable: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
 
   try {
     const snapshot = await getSoSoValueClient().marketSnapshot();
-    Object.assign(prices, extractPrices(snapshot));
+    const snapshotPrices = extractPrices(snapshot);
+    for (const [symbol, price] of Object.entries(snapshotPrices)) {
+      if (prices[symbol] === undefined) prices[symbol] = price;
+    }
     snapshotOk = true;
   } catch (err) {
-    warnings.push(
+    diagnostics.push(
       `SoSoValue market snapshot unavailable: ${err instanceof Error ? err.message : String(err)}`,
     );
   }
@@ -275,9 +329,13 @@ export async function projectPortfolioUsd(
       resolveProfile(profileId ?? getEnv().HATCH_DEFAULT_PROFILE),
     );
     const tickers = await sodex.marketsTickers();
-    supplementPricesFromSodexTickers(prices, tickers);
+    const tickerPrices: Record<string, number> = {};
+    supplementPricesFromSodexTickers(tickerPrices, tickers);
+    for (const [symbol, price] of Object.entries(tickerPrices)) {
+      if (prices[symbol] === undefined) prices[symbol] = price;
+    }
   } catch (err) {
-    warnings.push(
+    diagnostics.push(
       `SoDEX ticker supplement failed: ${err instanceof Error ? err.message : String(err)}`,
     );
   }
@@ -308,8 +366,19 @@ export async function projectPortfolioUsd(
   return {
     totalUsd,
     components,
-    source: snapshotOk ? "sosovalue+sodex" : "sodex",
+    source: officialPricesOk
+      ? snapshotOk
+        ? "sodex-asset-prices+sosovalue"
+        : "sodex-asset-prices"
+      : snapshotOk
+        ? "sosovalue+sodex"
+        : "sodex",
+    valuationMethod: officialPricesOk
+      ? "sodex_asset_price"
+      : "sodex_last_trade",
+    valuationScope: "spot_trading_value",
     pricedAt: new Date().toISOString(),
     warnings,
+    diagnostics,
   };
 }

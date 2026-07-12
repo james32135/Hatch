@@ -1,7 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { HatchError } from "../lib/errors.js";
-import { getPrisma } from "../lib/prisma.js";
 import { requireParent, assertChildAccess } from "../lib/childAccess.js";
 import {
   DOCUMENTED_YIELD_ASSUMPTION_BANDS,
@@ -36,16 +35,9 @@ export async function registerProjectionRoutes(
       if (!parsed.success) {
         throw new HatchError("invalid_body", parsed.error.message, 400);
       }
-      let startingUsd = parsed.data.startingUsd ?? 0;
+      const startingUsd = parsed.data.startingUsd ?? 0;
       if (parsed.data.childId) {
         await assertChildAccess(req, parsed.data.childId);
-        const snap = await getPrisma().portfolioSnapshot.findFirst({
-          where: { childId: parsed.data.childId },
-          orderBy: { createdAt: "desc" },
-        });
-        if (snap?.totalUsd != null) {
-          startingUsd = Number(snap.totalUsd.toString());
-        }
       }
       const annualYield =
         parsed.data.annualYield ?? DOCUMENTED_YIELD_ASSUMPTION_BANDS.base;
@@ -56,7 +48,11 @@ export async function registerProjectionRoutes(
         years: parsed.data.years,
         annualYield,
       });
-      return { result };
+      return {
+        result,
+        ownership: "educational_projection",
+        note: "Projection uses caller-provided starting value only. Family SoDEX balances are never treated as child principal.",
+      };
     },
   );
 
@@ -77,25 +73,22 @@ export async function registerProjectionRoutes(
       if (!body.success) {
         throw new HatchError("invalid_body", body.error.message, 400);
       }
-      let startingUsd = body.data.startingUsd;
+      const startingUsd = body.data.startingUsd;
       if (body.data.childId) {
         await assertChildAccess(req, body.data.childId);
-        const snap = await getPrisma().portfolioSnapshot.findFirst({
-          where: { childId: body.data.childId },
-          orderBy: { createdAt: "desc" },
-        });
-        if (snap?.totalUsd != null) {
-          startingUsd = Number(snap.totalUsd.toString());
-        }
       }
       const monthly =
         body.data.monthlyAllowanceUsd ?? body.data.weeklyAllowanceUsd * 4;
-      return scenarioPack({
+      return {
+        ...scenarioPack({
         startingUsd,
         weeklyAllowanceUsd: body.data.weeklyAllowanceUsd,
         monthlyAllowanceUsd: monthly,
         years: body.data.years,
-      });
+        }),
+        ownership: "educational_projection",
+        startingValueSource: "request",
+      };
     },
   );
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   extractBalances,
+  extractSodexAssetPrices,
   mergeBalanceSources,
   resolvePriceUsd,
   supplementPricesFromSodexTickers,
@@ -59,6 +60,19 @@ describe("portfolio snapshot pricing helpers", () => {
     });
     expect(resolvePriceUsd("WSOSO", prices)).toBe(0.45);
     expect(resolvePriceUsd("vETH", prices)).toBe(2068.7);
+  });
+
+  it("extracts the official SoDEX portfolio asset-price feed", () => {
+    const prices = extractSodexAssetPrices({
+      data: [
+        { name: "vUSDC", price: "1" },
+        { name: "WSOSO", price: "0.3076" },
+        { name: "vBTC", price: "63792.44" },
+      ],
+    });
+    expect(prices.vUSDC).toBe(1);
+    expect(prices.WSOSO).toBe(0.3076);
+    expect(prices.vBTC).toBe(63792.44);
   });
 
   it("detects material USD delta", () => {

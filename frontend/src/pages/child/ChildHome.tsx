@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import { fmtUsd, fmtPct } from "@/lib/format";
+import { fmtUsd } from "@/lib/format";
 import { resolveLivePortfolioUsd, portfolioFreshness } from "@/lib/portfolio";
 import { PortfolioBalanceHero } from "@/components/story/PortfolioBalanceHero";
 import { TokenMark } from "@/lib/tokenIcons";
@@ -27,7 +27,6 @@ export default function ChildHome() {
 
   const total = resolveLivePortfolioUsd(p.data);
   const fresh = portfolioFreshness(p.data);
-  const pnlPct = p.data?.performance?.pnlPct;
   const holdings = (p.data?.holdings || []).slice(0, 4);
   const name = me.data?.displayName || me.data?.child?.displayName || "friend";
   const policy = (allowances.data?.policies || []).find((x: any) => x.childId === childId);
@@ -38,9 +37,10 @@ export default function ChildHome() {
     <div className="space-y-8">
       <div>
         <div className="text-sm text-white/50">Hey {name}</div>
-        <h1 className="mt-1 text-2xl font-medium tracking-tight text-white">Your growing money</h1>
+        <h1 className="mt-1 text-2xl font-medium tracking-tight text-white">Your family&apos;s investing</h1>
         <p className="mt-2 max-w-md text-sm text-white/55">
-          This number comes from your parent&apos;s real trading account. You can look and learn. You cannot invest or change anything.
+          This is your parent&apos;s shared SoDEX spot account, not money allocated
+          to you. You can look and learn, but you cannot invest or change anything.
         </p>
       </div>
 
@@ -53,7 +53,7 @@ export default function ChildHome() {
             <animateTransform attributeName="transform" type="rotate" from="360 60 60" to="0 60 60" dur="18s" repeatCount="indefinite" />
           </circle>
         </svg>
-        <div className="text-xs uppercase tracking-widest text-white/40">Your portfolio</div>
+        <div className="text-xs uppercase tracking-widest text-white/40">Family spot trading value</div>
         <div className="mt-3">
           <PortfolioBalanceHero
             portfolio={p.data}
@@ -61,21 +61,16 @@ export default function ChildHome() {
             className="text-6xl font-medium tracking-tight md:text-7xl"
           />
         </div>
-        {total != null && pnlPct != null && (
-          <div
-            className={`mt-2 text-lg ${Number(pnlPct) >= 0 ? "text-[hsl(142_71%_55%)]" : "text-[hsl(350_89%_65%)]"}`}
-          >
-            {fmtPct(pnlPct, { sign: true })} since you started
-          </div>
-        )}
         {fresh.sharedAccount && total != null && (
-          <p className="mt-2 text-xs text-white/40">From your parent&apos;s live SoDEX account</p>
+          <p className="mt-2 text-xs text-white/40">
+            Managed by your parent · read-only family account · spot balances only
+          </p>
         )}
       </div>
 
       {holdings.length > 0 && (
         <div>
-          <div className="mb-3 text-sm text-white/60">What you own</div>
+          <div className="mb-3 text-sm text-white/60">Family spot holdings</div>
           <div className="grid gap-2 sm:grid-cols-2">
             {holdings.map((h: any, i: number) => {
               const usd = h.usdValue ?? h.valueUsd;

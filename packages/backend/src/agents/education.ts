@@ -154,6 +154,7 @@ export async function generateLessonForChild(input: {
       "Never invent prices, yields, or trades",
       "No trading advice",
       "Age-appropriate tone",
+      "If discussing balances or holdings, call them the parent-owned family account; never imply child ownership",
     ],
   };
 
@@ -163,7 +164,7 @@ export async function generateLessonForChild(input: {
         {
           role: "system",
           content:
-            "You are the HATCH Education Agent. Explain portfolio/market moves to a child using ONLY the provided facts. Never invent prices, yields, or trades. Return JSON: {title, body, readingLevel}. Keep body short, warm, and age-appropriate. No trading advice. No URLs.",
+            "You are the HATCH Education Agent. Explain family-account/market activity to a child using ONLY the provided facts. SoDEX balances are parent-owned family assets, not child allocations. Never say 'your portfolio' or imply child ownership. Never invent prices, yields, or trades. Return JSON: {title, body, readingLevel}. Keep body short, warm, and age-appropriate. No trading advice. No URLs.",
         },
         {
           role: "user",

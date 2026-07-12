@@ -24,7 +24,7 @@ export default function ChildShell() {
           <NavLink to="/child" end className={tab}>Today</NavLink>
           <NavLink to="/child/why" className={tab}>Why?</NavLink>
           <NavLink to="/child/learn" className={tab}>Learn</NavLink>
-          <NavLink to="/child/portfolio" className={tab}>Portfolio</NavLink>
+          <NavLink to="/child/portfolio" className={tab}>Family</NavLink>
         </nav>
       </header>
       <main className="mx-auto max-w-3xl px-6 py-8"><Outlet /></main>

@@ -24,13 +24,21 @@ export default function ChildrenList() {
     <div>
       <h1 className="mb-6 text-2xl font-medium tracking-tight">Children</h1>
       {children.length > 0 && (
-        <p className="mb-4 text-xs text-white/45">
-          {fresh.live
-            ? "Shared family trading account · live SoDEX"
-            : fresh.waitingSsi || family.data?.sodexError
-              ? "Waiting for live prices"
-              : "Waiting for live balances"}
-        </p>
+        <div className="mb-4 rounded-xl border border-white/10 bg-white/[0.02] p-4">
+          <div className="text-xs uppercase tracking-wider text-white/40">
+            Family SoDEX spot account
+          </div>
+          <div className="mt-1 text-2xl font-medium">
+            {total == null ? "—" : fmtUsd(total)}
+          </div>
+          <p className="mt-1 text-xs text-white/45">
+            {fresh.live
+              ? "Parent-owned · one shared value shown once · not divided between children"
+              : fresh.waitingSsi || family.data?.sodexError
+                ? "Waiting for live prices"
+                : "Waiting for live balances"}
+          </p>
+        </div>
       )}
       <div className="space-y-2">
         {children.map((c: any) => (
@@ -46,7 +54,7 @@ export default function ChildrenList() {
               </div>
             </div>
             <div className="text-right">
-              <div className="font-medium">{total == null ? "-" : fmtUsd(total)}</div>
+              <div className="text-xs text-white/45">Parent-managed plan</div>
               {c.paused && <StatusPip tone="warn" label="Paused" className="mt-1" />}
             </div>
           </Link>

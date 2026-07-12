@@ -31,7 +31,7 @@ export default function ChildSSI() {
       if (!childId) throw new Error("childId required");
       return api.post<any>("/api/ssi/sync/portfolio", { childId });
     },
-    onSuccess: () => toast.success("Refreshing portfolio"),
+    onSuccess: () => toast.success("Refreshing family spot account"),
     onError: (e: any) => toast.error(e?.message || "Couldn't refresh"),
   });
 
@@ -47,7 +47,7 @@ export default function ChildSSI() {
       1: "Add cash so the weekly allowance can invest",
       2: "Approve the investment from their allowance page",
       3: "Confirm in your wallet when prompted",
-      4: "Watch their portfolio update with real holdings",
+      4: "Watch the parent-owned family spot account update",
     };
     return map[i] || text.replace(/POST \/api\/\S+/g, "approve in the app").replace(/EIP-712/gi, "wallet approval").replace(/vUSDC/g, "cash").replace(/vMAG7ssi_vUSDC/g, "MAG7 index");
   });
@@ -56,7 +56,11 @@ export default function ChildSSI() {
     <div className="space-y-4">
       <SectionCard title="How investing works">
         <div className="grid gap-3 sm:grid-cols-3">
-          <Feature icon={TrendingUp} title="Invest" detail="Weekly allowance buys diversified index exposure automatically." />
+          <Feature
+            icon={TrendingUp}
+            title="Invest"
+            detail="A child-specific allowance plan directs parent-approved purchases into the shared family account."
+          />
           <Feature icon={Landmark} title="Earn" detail="Optional staking happens on the official SSI Earn experience." />
           <Feature icon={GraduationCap} title="Learn" detail="Short lessons explain what changed in plain language." />
         </div>
@@ -99,13 +103,16 @@ export default function ChildSSI() {
       </SectionCard>
 
       <SectionCard
-        title="On-chain balances"
+        title="Connected parent wallet balances"
         action={
           <Button size="sm" variant="ghost" className="text-white/70" onClick={() => sync.mutate()} disabled={sync.isPending || !childId}>
             Refresh
           </Button>
         }
       >
+        <p className="mb-3 text-xs leading-relaxed text-white/45">
+          These are wallet-level balances owned by the connected parent. They are not allocated child holdings.
+        </p>
         {!address ? (
           <div className="text-sm text-white/50">Connect your wallet to view Base balances.</div>
         ) : balances.isLoading ? (

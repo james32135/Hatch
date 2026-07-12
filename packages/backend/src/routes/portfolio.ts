@@ -96,6 +96,28 @@ export async function registerPortfolioRoutes(app: FastifyInstance): Promise<voi
                   ? "snapshot_only"
                   : "no_balances",
       };
+      const ownership = {
+        model: "family_shared_spot_account" as const,
+        owner: "parent" as const,
+        scope: "family" as const,
+        childAllocationSupported: false,
+        childAllocatedPrincipalUsd: null,
+        childAllocatedMarketValueUsd: null,
+        childAllocatedHoldings: null,
+        childContext: {
+          childId: child.id,
+          relationship: "read_only_view_and_plan_attribution" as const,
+        },
+        explanation:
+          "Balances belong to the parent's shared SoDEX spot account. childId grants access and attributes plans/orders/lessons; it does not establish asset ownership.",
+      };
+      const valuation = {
+        scope: "spot_trading_value" as const,
+        method: engine?.projection?.valuationMethod ?? null,
+        excludes: ["futures", "EVM funding", "external SSI staking"],
+        comparisonTarget: "SoDEX Trading Value (spot), not SoDEX Total Assets",
+        pricedAt: engine?.projection?.pricedAt ?? null,
+      };
 
       return {
         child: {
@@ -110,8 +132,12 @@ export async function registerPortfolioRoutes(app: FastifyInstance): Promise<voi
         sodexBalances: accountBalances,
         totalUsd,
         liveTotalUsd,
+        familySpotTotalUsd: liveTotalUsd,
+        childAllocatedTotalUsd: null,
         snapshotTotalUsd,
         freshness,
+        ownership,
+        valuation,
         projection: engine?.projection ?? null,
         warnings: engine?.projection?.warnings ?? [],
         holdings: engine?.holdings ?? [],
@@ -122,7 +148,7 @@ export async function registerPortfolioRoutes(app: FastifyInstance): Promise<voi
         staking: engine?.staking ?? null,
         sodexError,
         latestSnapshot: latest,
-        note: "Balances are parent SoDEX account reads. Child is view-only. No invented prices. Snapshot is never shown as live.",
+        note: "Parent-owned family SoDEX spot account. Child is read-only; no child allocation ledger exists. Snapshot is never shown as live.",
       };
     },
   );
@@ -143,7 +169,13 @@ export async function registerPortfolioRoutes(app: FastifyInstance): Promise<voi
         take: limit,
       });
       const { snapshotsToHistory } = await import("../services/portfolioEngine.js");
-      return { childId, history: snapshotsToHistory(rows) };
+      return {
+        childId,
+        scope: "family_shared_spot_account",
+        owner: "parent",
+        history: snapshotsToHistory(rows),
+        note: "Snapshots are tagged by child view context but contain the parent's family spot account value.",
+      };
     },
   );
 
@@ -159,7 +191,14 @@ export async function registerPortfolioRoutes(app: FastifyInstance): Promise<voi
         orderBy: { createdAt: "desc" },
         take: 100,
       });
-      return { childId, parentWalletNote: "Shared parent SoDEX; timeline attributed by childId", transactions: orders };
+      return {
+        childId,
+        scope: "child_plan_attribution",
+        assetOwner: "parent",
+        parentWalletNote:
+          "Orders are attributed to this child's plan. Filled assets remain in the shared parent SoDEX account.",
+        transactions: orders,
+      };
     },
   );
 
@@ -198,7 +237,7 @@ export async function registerPortfolioRoutes(app: FastifyInstance): Promise<voi
 
       let priced: Awaited<ReturnType<typeof priceAccountState>> | null = null;
       try {
-        priced = await priceAccountState(state, balances);
+        priced = await priceAccountState(state, balances, profile.id);
       } catch {
         priced = null;
       }
@@ -219,7 +258,12 @@ export async function registerPortfolioRoutes(app: FastifyInstance): Promise<voi
         snapshot,
         projection:
           priced?.projection ??
-          (await projectPortfolioUsd(state, balances).catch(() => null)),
+          (await projectPortfolioUsd(state, balances, profile.id).catch(() => null)),
+        ownership: {
+          model: "family_shared_spot_account",
+          owner: "parent",
+          childAllocationSupported: false,
+        },
       };
     },
   );

@@ -27,19 +27,20 @@ export default function ChildLessons() {
   const gen = useMutation({
     mutationFn: () => {
       const live = resolveLivePortfolioUsd(portfolio.data);
-      const snap = Number(portfolio.data?.snapshotTotalUsd ?? portfolio.data?.latestSnapshot?.totalUsd);
-      const delta =
-        live != null && Number.isFinite(snap)
-          ? live - snap
-          : live != null
-            ? live
-            : undefined;
-      if (delta === undefined || !Number.isFinite(delta) || Math.abs(delta) < 0.01) {
-        return Promise.reject(new Error("No portfolio change to write about yet"));
+      const familyHoldings = portfolio.data?.holdings || [];
+      const largest = familyHoldings
+        .slice()
+        .sort(
+          (a: any, b: any) =>
+            Number(b.usdValue ?? b.valueUsd ?? 0) -
+            Number(a.usdValue ?? a.valueUsd ?? 0),
+        )[0];
+      if (live == null || !familyHoldings.length) {
+        return Promise.reject(new Error("No priced family-account holdings to explain yet"));
       }
       return api.post<any>(`/api/lessons/${childId}/generate`, {
-        kind: "portfolio_delta",
-        triggerDelta: delta,
+        kind: "manual",
+        asset: largest?.symbol || largest?.token || "family account",
       });
     },
     onSuccess: () => {
@@ -56,13 +57,13 @@ export default function ChildLessons() {
     .sort((a: any, b: any) => Number(b.usdValue ?? b.valueUsd ?? 0) - Number(a.usdValue ?? a.valueUsd ?? 0))[0];
   const contextHint =
     total != null
-      ? `Portfolio ${fmtUsd(total)}${top ? ` · largest holding ${friendlyMarket(top.symbol || top.token)}` : ""}`
-      : "Tied to their live portfolio when available.";
+      ? `Family spot account ${fmtUsd(total)}${top ? ` · largest family holding ${friendlyMarket(top.symbol || top.token)}` : ""}`
+      : "Tied to parent-owned family account changes when available.";
 
   return (
     <SectionCard
       title="Lessons"
-      subtitle={`Short explanations from real holdings and moves. ${contextHint}`}
+      subtitle={`Child-specific education grounded in family-account activity. ${contextHint}`}
       action={
         <Button
           size="sm"

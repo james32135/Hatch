@@ -25,7 +25,7 @@ const DEFAULT_LABELS: Record<PipelineStepId, string> = {
   signed: "Wallet signed",
   submitted: "Order submitted",
   filled: "Order filled",
-  portfolio: "Portfolio updated",
+  portfolio: "Family account updated",
   lesson: "Lesson generated",
   recorded: "Recorded on ValueChain",
 };

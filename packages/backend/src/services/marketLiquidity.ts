@@ -1,6 +1,6 @@
 /**
- * Live SoDEX market discovery — wraps Market Eligibility Engine.
- * Only markets that pass ALL eligibility stages are selectable / submittable.
+ * Live SoDEX market discovery — public reads + dry gates + signed capability.
+ * Only matcher-capable markets are executable / buyable.
  */
 import type { HatchProfile } from "../config/environment.js";
 import { createSodexClient } from "../clients/sodex.js";
@@ -13,6 +13,10 @@ import {
   unwrapSymbolList,
   type MarketEligibility,
 } from "./marketEligibility.js";
+import {
+  getSymbolCapability,
+  type CapabilityLabel,
+} from "./marketCapability.js";
 
 export type MarketSnapshot = {
   symbol: string;
@@ -54,7 +58,10 @@ export type MarketSnapshot = {
   tradingEnabled: boolean;
   cancelOnly: boolean;
   maintenance: boolean;
-  gatewayValidation: "PASS" | "FAIL";
+  gatewayValidation: CapabilityLabel;
+  matcherCapable: boolean;
+  fillCapable: boolean;
+  verifiedSafe: false;
   lastVerified: string;
   eligibility: MarketEligibility;
   meta: SpotSymbolMeta;
@@ -80,7 +87,8 @@ export type MarketExecutionReport = {
     tradingEnabled: boolean;
     cancelOnly: boolean;
     maintenance: boolean;
-    gatewayValidation: "PASS" | "FAIL";
+    gatewayValidation: CapabilityLabel;
+    matcherCapable: boolean;
   }>;
   topExecutable: MarketSnapshot[];
 };
@@ -159,6 +167,9 @@ function eligibilityToSnapshot(
     cancelOnly: elig.cancelOnly,
     maintenance: elig.maintenance,
     gatewayValidation: elig.gatewayValidation,
+    matcherCapable: elig.matcherCapable,
+    fillCapable: elig.fillCapable,
+    verifiedSafe: false,
     lastVerified: elig.lastVerified,
     eligibility: elig,
     meta,
@@ -214,6 +225,10 @@ export async function scanExecutableMarkets(
     );
 
     for (const { meta, data, err, gateway } of books) {
+      const capability = await getSymbolCapability({
+        network: profile.id === "mainnet" ? "mainnet" : "testnet",
+        symbol: meta.name,
+      });
       const elig = evaluateMarketEligibility({
         meta,
         bookData: data,
@@ -224,6 +239,7 @@ export async function scanExecutableMarkets(
         accountID: opts?.accountID,
         gatewayReachable: gateway,
         lastVerified: verifiedAt,
+        capability,
       });
       const snap = eligibilityToSnapshot(elig, tickerBySym.get(meta.name) ?? null);
       if (snap) out.push(snap);
@@ -257,6 +273,7 @@ export function buildMarketExecutionReport(input: {
       cancelOnly: m.cancelOnly,
       maintenance: m.maintenance,
       gatewayValidation: m.gatewayValidation,
+      matcherCapable: m.matcherCapable,
     }));
 
   return {
@@ -351,17 +368,19 @@ export function selectExecutionRoute(input: {
         },
       );
     }
-    if (chosen.gatewayValidation !== "PASS" || !chosen.executable) {
+    if (!chosen.executable || !chosen.matcherCapable || chosen.cancelOnly) {
       throw Object.assign(
-        new Error(`${chosen.symbol} gateway validation failed`),
+        new Error(
+          `${chosen.symbol} not matcher-capable (${chosen.gatewayValidation})`,
+        ),
         { code: "market_not_executable" },
       );
     }
-    why = `Parent selected eligible ${chosen.symbol} (score=${chosen.score}, gateway=${chosen.gatewayValidation}, askDepthUsd=${chosen.askDepthUsd.toFixed(2)}, verified=${chosen.lastVerified}).`;
+    why = `Parent selected matcher-capable ${chosen.symbol} (score=${chosen.score}, capability=${chosen.gatewayValidation}, askDepthUsd=${chosen.askDepthUsd.toFixed(2)}, verified=${chosen.lastVerified}).`;
   } else {
     chosen = report.available[0];
     if (chosen) {
-      why = `Highest eligible score: ${chosen.symbol} (score=${chosen.score}, gateway=${chosen.gatewayValidation}). No preferred-symbol bias.`;
+      why = `Highest matcher-capable score: ${chosen.symbol} (score=${chosen.score}, capability=${chosen.gatewayValidation}). No preferred-symbol bias.`;
     }
   }
 
@@ -392,7 +411,7 @@ export function selectExecutionRoute(input: {
   };
 }
 
-/** Re-probe eligibility immediately before relay. */
+/** Re-check public book + signed capability immediately before relay. */
 export async function assertMarketStillExecutable(input: {
   profile: HatchProfile;
   symbol: string;
@@ -403,10 +422,15 @@ export async function assertMarketStillExecutable(input: {
     symbol: input.symbol,
     notionalUsd: input.notionalUsd,
   });
-  if (!elig.eligible || elig.gatewayValidation !== "PASS" || elig.bestAsk == null) {
+  if (
+    !elig.eligible ||
+    !elig.matcherCapable ||
+    elig.cancelOnly ||
+    elig.bestAsk == null
+  ) {
     throw Object.assign(
       new Error(
-        `${input.symbol} no longer eligible: ${elig.failReason || "failed stages"}`,
+        `${input.symbol} no longer executable: ${elig.failReason || elig.gatewayValidation}`,
       ),
       { code: "market_not_executable" },
     );

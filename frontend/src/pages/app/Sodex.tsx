@@ -32,7 +32,7 @@ export default function Sodex() {
       <div>
         <h1 className="text-2xl font-medium tracking-tight">Trading</h1>
         <p className="mt-1 max-w-xl text-sm text-white/55">
-          Your wallet stays yours. Only markets that pass live eligibility appear here.
+          Your wallet stays yours. Only markets with signed matcher capability appear here.
         </p>
       </div>
 
@@ -62,7 +62,7 @@ export default function Sodex() {
 
       <SectionCard
         title="Markets you can actually buy right now"
-        subtitle="Live eligibility — no hardcoded symbol list."
+        subtitle="Signed matcher capability required — dry reads alone never qualify."
       >
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -70,7 +70,7 @@ export default function Sodex() {
               <tr>
                 <th className="pb-2 text-left font-normal">Market</th>
                 <th className="pb-2 text-right font-normal">Trading</th>
-                <th className="pb-2 text-right font-normal">Gateway</th>
+                <th className="pb-2 text-right font-normal">Capability</th>
                 <th className="pb-2 text-right font-normal">Depth</th>
               </tr>
             </thead>
@@ -88,8 +88,14 @@ export default function Sodex() {
                   </td>
                   <td className="py-2.5 text-right">
                     <StatusPip
-                      tone={m.gatewayValidation === "PASS" ? "ok" : "danger"}
-                      label={m.gatewayValidation || "—"}
+                      tone={
+                        m.gatewayValidation === "MATCHER_OK" || m.gatewayValidation === "FILL_OK"
+                          ? "ok"
+                          : m.gatewayValidation === "CANCEL_ONLY"
+                            ? "danger"
+                            : "warn"
+                      }
+                      label={m.gatewayValidation || "UNVERIFIED"}
                     />
                   </td>
                   <td className="py-2.5 text-right font-mono text-white/60">
@@ -100,7 +106,7 @@ export default function Sodex() {
               {!discovery.isLoading && available.length === 0 && (
                 <tr>
                   <td colSpan={4} className="py-4 text-white/50">
-                    No eligible markets right now.
+                    No matcher-capable markets right now.
                   </td>
                 </tr>
               )}

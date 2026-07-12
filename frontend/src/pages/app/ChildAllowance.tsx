@@ -82,7 +82,12 @@ export default function ChildAllowance() {
 
   // Never allow selecting a market that failed eligibility
   const available = (discovery.data?.available || discovery.data?.report?.available || []).filter(
-    (m: any) => m.executable !== false && m.gatewayValidation !== "FAIL",
+    (m: any) =>
+      m.executable !== false &&
+      m.matcherCapable !== false &&
+      m.gatewayValidation !== "FAIL" &&
+      m.gatewayValidation !== "CANCEL_ONLY" &&
+      m.gatewayValidation !== "UNVERIFIED",
   );
   const unavailable = discovery.data?.unavailable || discovery.data?.report?.unavailable || [];
   const verification = useQuery({
@@ -311,7 +316,7 @@ export default function ChildAllowance() {
                       <Check className="h-4 w-4 text-emerald-300" />
                     ) : (
                       <span className="text-[10px] uppercase tracking-wide text-emerald-300/80">
-                        Eligible
+                        Matcher OK
                       </span>
                     )}
                   </div>
@@ -329,8 +334,16 @@ export default function ChildAllowance() {
                       <span className="text-white/80">{m.maintenance ? "YES" : "NO"}</span>
                     </span>
                     <span>
-                      Gateway{" "}
-                      <span className="text-emerald-300/90">{m.gatewayValidation || "PASS"}</span>
+                      Capability{" "}
+                      <span
+                        className={
+                          m.gatewayValidation === "MATCHER_OK" || m.gatewayValidation === "FILL_OK"
+                            ? "text-emerald-300/90"
+                            : "text-amber-200/80"
+                        }
+                      >
+                        {m.gatewayValidation || "UNVERIFIED"}
+                      </span>
                     </span>
                   </div>
                   <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 font-mono text-[11px] text-white/45">

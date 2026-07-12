@@ -55,20 +55,24 @@ function parseSymbol(row: Record<string, unknown>): SpotSymbolMeta | null {
   };
 }
 
-/** Match sosomind sodex-market formatDecimal — strip trailing zeros (SoDEX rejects "0.4500"). */
+/** Match SoDEX decimal formatting — strip trailing zeros (SoDEX rejects "0.4500"). */
 export function formatDecimal(
   value: number,
   stepOrPrecision: number,
   mode: "round" | "floor" = "round",
 ): string {
   if (!Number.isFinite(value) || value <= 0) return "0";
+  // Tick/step sizes are always positive steps. Integers >= 1 (e.g. BTC tick=1) are
+  // steps, not decimal-precision counts — treating them as precision yields 0.1.
   const step =
     stepOrPrecision > 0 && stepOrPrecision < 1
       ? stepOrPrecision
-      : Math.pow(10, -Math.max(0, stepOrPrecision));
+      : stepOrPrecision >= 1
+        ? stepOrPrecision
+        : Math.pow(10, -Math.max(0, stepOrPrecision));
   const scaled =
     mode === "floor" ? Math.floor(value / step) * step : Math.round(value / step) * step;
-  const decimals = step < 1 ? Math.max(0, Math.ceil(-Math.log10(step))) : 0;
+  const decimals = step < 1 ? Math.max(0, Math.ceil(-Math.log10(step) - 1e-12)) : 0;
   return scaled.toFixed(decimals).replace(/\.?0+$/, "") || "0";
 }
 

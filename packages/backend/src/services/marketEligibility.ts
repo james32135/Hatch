@@ -1,11 +1,10 @@
 /**
- * Market Eligibility Engine — 15-stage gate before any market is shown or submitted.
- * Official sources: GET /markets/symbols (status), orderbook, tickers.
- * Dry-validate formatting + EIP-712 payload without submitting.
+ * Market Eligibility Engine — public-read + dry gates, then signed capability.
+ * Official REST status is only TRADING|HALT. Cancel-only is matcher-only evidence.
+ * Dry serialization never implies gateway/matcher acceptance.
  */
 import type { HatchProfile } from "../config/environment.js";
 import { createSodexClient } from "../clients/sodex.js";
-import { redisGet, redisSet } from "../lib/redis.js";
 import {
   formatDecimal,
   formatPrice,
@@ -17,6 +16,13 @@ import {
   buildBatchNewOrdersParams,
 } from "./spotOrders.js";
 import { payloadHashFromAction } from "./sodexSign.js";
+import {
+  capabilityLabel,
+  getSymbolCapability,
+  isMatcherCapable,
+  type CapabilityLabel,
+  type SymbolCapability,
+} from "./marketCapability.js";
 
 /** Max mid-spread for family invest eligibility. */
 export const MAX_ELIGIBLE_SPREAD_PCT = 0.05;
@@ -49,7 +55,7 @@ export type EligibilityStageId =
   | "trading_enabled"
   | "not_cancel_only"
   | "not_maintenance"
-  | "gateway_accepts"
+  | "public_reads_ok"
   | "orderbook_valid"
   | "ask_exists"
   | "bid_exists"
@@ -57,8 +63,9 @@ export type EligibilityStageId =
   | "min_notional"
   | "tick_compatible"
   | "precision_compatible"
-  | "ioc_accepted"
-  | "dry_validation";
+  | "dry_ioc_payload"
+  | "dry_validation"
+  | "signed_matcher_capable";
 
 export type EligibilityStage = {
   id: EligibilityStageId;
@@ -78,7 +85,12 @@ export type MarketEligibility = {
   tradingEnabled: boolean;
   cancelOnly: boolean;
   maintenance: boolean;
-  gatewayValidation: "PASS" | "FAIL";
+  /** Signed capability label — never PASS from dry reads. */
+  gatewayValidation: CapabilityLabel;
+  capability: SymbolCapability | null;
+  matcherCapable: boolean;
+  fillCapable: boolean;
+  verifiedSafe: false;
   lastVerified: string;
   failReason: string | null;
   stages: EligibilityStage[];
@@ -131,13 +143,15 @@ export function humanFailReason(stages: EligibilityStage[]): string {
       return "Cancel Only";
     case "not_maintenance":
       return "Maintenance";
-    case "gateway_accepts":
+    case "public_reads_ok":
+      return "Public market reads failed";
     case "dry_validation":
+    case "dry_ioc_payload":
       return fail.detail?.toLowerCase().includes("tick")
         ? "TickSize Error"
         : fail.detail?.toLowerCase().includes("precision")
           ? "Precision Error"
-          : "Gateway Rejects Orders";
+          : "Dry payload failed";
     case "orderbook_valid":
       return "Empty orderbook";
     case "ask_exists":
@@ -152,8 +166,10 @@ export function humanFailReason(stages: EligibilityStage[]): string {
       return "TickSize Error";
     case "precision_compatible":
       return "Precision Error";
-    case "ioc_accepted":
-      return "Unsupported";
+    case "signed_matcher_capable":
+      return fail.detail?.includes("cancel")
+        ? "Cancel Only"
+        : "Unsigned / unmatched capability";
     default:
       return fail.name;
   }
@@ -371,6 +387,7 @@ export function evaluateMarketEligibility(input: {
   accountID?: number;
   gatewayReachable: boolean;
   lastVerified?: string;
+  capability?: SymbolCapability | null;
 }): MarketEligibility {
   const verified = input.lastVerified ?? new Date().toISOString();
   const notional = Math.max(0, input.notionalUsd);
@@ -400,14 +417,18 @@ export function evaluateMarketEligibility(input: {
     bestBid;
   const quote = String(input.ticker?.quoteCoin ?? "vUSDC");
 
-  const cancelOnly = st === "CANCEL_ONLY" || st === "CANCELONLY";
+  const metaCancelOnly = st === "CANCEL_ONLY" || st === "CANCELONLY";
+  const capability = input.capability ?? null;
+  const cancelOnly = metaCancelOnly || !!capability?.cancelOnly;
   const maintenance = st === "MAINTENANCE";
   const tradingEnabled =
     !!meta &&
     !BLOCKED.has(st) &&
-    !cancelOnly &&
+    !metaCancelOnly &&
     !maintenance &&
     (st === "TRADING" || st === "UNKNOWN" || st === "");
+  const matcherCapable = isMatcherCapable(capability);
+  const fillCapable = !!capability && isFreshCap(capability) && capability.fillProven;
 
   const stages: EligibilityStage[] = [];
   stages.push(
@@ -419,21 +440,31 @@ export function evaluateMarketEligibility(input: {
     stage(
       3,
       "trading_enabled",
-      "Trading enabled",
+      "Metadata trading",
       tradingEnabled,
       `status=${meta?.status ?? "n/a"}`,
     ),
   );
-  stages.push(stage(4, "not_cancel_only", "NOT cancel only", !cancelOnly, st || "n/a"));
+  stages.push(
+    stage(
+      4,
+      "not_cancel_only",
+      "NOT cancel only",
+      !cancelOnly,
+      cancelOnly
+        ? capability?.reason || st || "signed cancel-only"
+        : "no cancel-only evidence",
+    ),
+  );
   stages.push(stage(5, "not_maintenance", "NOT maintenance", !maintenance, st || "n/a"));
-  const gatewayOk = input.gatewayReachable && !input.bookError;
+  const publicReadsOk = input.gatewayReachable && !input.bookError;
   stages.push(
     stage(
       6,
-      "gateway_accepts",
-      "Gateway accepts submissions",
-      gatewayOk,
-      input.bookError ? String(input.bookError).slice(0, 80) : "orderbook HTTP ok",
+      "public_reads_ok",
+      "Public market reads OK",
+      publicReadsOk,
+      input.bookError ? String(input.bookError).slice(0, 80) : "symbols+orderbook HTTP ok",
     ),
   );
   const bookValid = !!input.bookData && !input.bookError;
@@ -464,16 +495,20 @@ export function evaluateMarketEligibility(input: {
       bestBid != null ? String(bestBid) : "none",
     ),
   );
-  const spreadOk = spreadPct != null && spreadPct <= MAX_ELIGIBLE_SPREAD_PCT;
+  const spreadOk =
+    (spreadPct != null && spreadPct <= MAX_ELIGIBLE_SPREAD_PCT) ||
+    matcherCapable;
   stages.push(
     stage(
       10,
       "spread_ok",
       "Spread acceptable",
       spreadOk,
-      spreadPct != null
-        ? `${(spreadPct * 100).toFixed(2)}% (max ${(MAX_ELIGIBLE_SPREAD_PCT * 100).toFixed(0)}%)`
-        : "n/a",
+      matcherCapable && !(spreadPct != null && spreadPct <= MAX_ELIGIBLE_SPREAD_PCT)
+        ? `waived (${spreadPct != null ? `${(spreadPct * 100).toFixed(2)}%` : "n/a"}) — signed matcher capability`
+        : spreadPct != null
+          ? `${(spreadPct * 100).toFixed(2)}% (max ${(MAX_ELIGIBLE_SPREAD_PCT * 100).toFixed(0)}%)`
+          : "n/a",
     ),
   );
   const depthNeed = Math.max(
@@ -530,7 +565,13 @@ export function evaluateMarketEligibility(input: {
     ),
   );
   stages.push(
-    stage(14, "ioc_accepted", "IOC accepted", !!meta && dry.ok, "LIMIT+IOC dry payload"),
+    stage(
+      14,
+      "dry_ioc_payload",
+      "Dry LIMIT+IOC payload",
+      !!meta && dry.ok,
+      "local serialization only — not a gateway submit",
+    ),
   );
   stages.push(
     stage(
@@ -541,9 +582,23 @@ export function evaluateMarketEligibility(input: {
       dry.ok ? `price=${dry.limitPrice} qty=${dry.quantity}` : dry.error ?? "fail",
     ),
   );
+  stages.push(
+    stage(
+      16,
+      "signed_matcher_capable",
+      "Signed matcher capable",
+      matcherCapable,
+      capability
+        ? `label=${capabilityLabel(capability)} source=${capability.source}`
+        : "no signed capability record",
+    ),
+  );
 
   const eligible = stages.every((s) => s.pass);
   const failReason = eligible ? null : humanFailReason(stages);
+  const gwLabel: CapabilityLabel = !publicReadsOk
+    ? "FAIL"
+    : capabilityLabel(capability);
 
   const depthCover =
     notional > 0 && askDepthUsd > 0
@@ -551,12 +606,15 @@ export function evaluateMarketEligibility(input: {
       : askDepthUsd > 0
         ? 1
         : 0;
-  const fillProb = eligible ? Math.min(0.98, 0.4 + 0.5 * depthCover) : 0;
+  const fillProb = eligible
+    ? Math.min(0.98, 0.4 + 0.5 * depthCover + (fillCapable ? 0.1 : 0))
+    : 0;
   let liq = 0;
   if (bestAsk) liq += 40;
   if (bestBid) liq += 10;
   liq += Math.min(30, askDepthUsd / 50);
   if (spreadPct != null) liq -= Math.min(25, spreadPct * 100);
+  if (fillCapable) liq += 15;
   const score = eligible
     ? Math.round((liq * 0.7 + fillProb * 100 * 0.3) * 100) / 100
     : 0;
@@ -571,8 +629,12 @@ export function evaluateMarketEligibility(input: {
     tradingEnabled,
     cancelOnly,
     maintenance,
-    gatewayValidation: gatewayOk && dry.ok ? "PASS" : "FAIL",
-    lastVerified: verified,
+    gatewayValidation: gwLabel,
+    capability,
+    matcherCapable,
+    fillCapable,
+    verifiedSafe: false,
+    lastVerified: capability?.observedAt ?? verified,
     failReason,
     stages,
     bestAsk: bestAsk && bestAsk > 0 ? bestAsk : null,
@@ -598,7 +660,11 @@ export function evaluateMarketEligibility(input: {
   };
 }
 
-/** Live capability probe (no order submit). Cached ~45s. */
+function isFreshCap(cap: SymbolCapability): boolean {
+  return new Date(cap.expiresAt).getTime() > Date.now();
+}
+
+/** Live public-read + dry probe, merged with signed capability. Not cached — capability changes must apply immediately. */
 export async function liveCapabilityProbe(input: {
   profile: HatchProfile;
   symbol: string;
@@ -606,16 +672,6 @@ export async function liveCapabilityProbe(input: {
   maxSlippageBps?: number;
   accountID?: number;
 }): Promise<MarketEligibility> {
-  const cacheKey = `elig:probe:${input.profile.id}:${input.symbol}:${Math.round(input.notionalUsd)}`;
-  const hit = await redisGet(cacheKey);
-  if (hit) {
-    try {
-      return JSON.parse(hit) as MarketEligibility;
-    } catch {
-      /* continue */
-    }
-  }
-
   const client = createSodexClient(input.profile);
   let gatewayReachable = true;
   let meta: SpotSymbolMeta | null = null;
@@ -657,7 +713,12 @@ export async function liveCapabilityProbe(input: {
     gatewayReachable = false;
   }
 
-  const result = evaluateMarketEligibility({
+  const capability = await getSymbolCapability({
+    network: input.profile.id === "mainnet" ? "mainnet" : "testnet",
+    symbol: input.symbol,
+  });
+
+  return evaluateMarketEligibility({
     meta,
     bookData,
     bookError,
@@ -666,8 +727,6 @@ export async function liveCapabilityProbe(input: {
     maxSlippageBps: input.maxSlippageBps,
     accountID: input.accountID,
     gatewayReachable,
+    capability,
   });
-
-  await redisSet(cacheKey, JSON.stringify(result), 45);
-  return result;
 }

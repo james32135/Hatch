@@ -1,64 +1,64 @@
 # MARKET_VERIFICATION_REPORT.md
 
-> Generated: 2026-07-12T20:41:24.728Z
+> Generated: 2026-07-12T21:52:02.509Z
 > Network: testnet
 > Notional probe: $6
-> Source: live SoDEX `/markets/symbols` + orderbooks + dry EIP-712 validation
-> Real IOC submits: attempted (eng key present)
+> Source: live SoDEX `/markets/symbols` + orderbooks + dry EIP-712 + signed capability records
+> Real IOC submits: not performed by this script — use `probe-sodex-market-capabilities.mts` for signed writes
+> Capability seed rows: 29
 
 ## Summary
 
 | Metric | Count |
 |--------|------:|
 | Scanned | 32 |
-| Eligible (shown in UI) | 4 |
-| Unavailable | 28 |
+| Matcher-capable (shown in UI) | 3 |
+| Unavailable | 29 |
 
-## Eligible — Markets you can actually buy right now
+## Matcher-capable — markets with signed evidence
 
-| Symbol | Trading Enabled | Cancel Only | Maintenance | Gateway | Dry Price | Dry Qty | Order Accepted | Order Filled | TradeID | OrderID | Balance Updated |
-|--------|:---:|:---:|:---:|:---:|---|---|:---:|:---:|---|---|:---:|
-| vBTC_vUSDC | YES | NO | NO | PASS | 64516 | 0.0001 | dry-only | — | — | — | — |
-| vNVDA_vUSDC | YES | NO | NO | PASS | 183.18 | 0.033 | dry-only | — | — | — | — |
-| vDEFIssi_vUSDC | YES | NO | NO | PASS | 0.2074 | 29.07 | dry-only | — | — | — | — |
-| vUSSI_vUSDC | YES | NO | NO | PASS | 1.2962 | 4.66 | dry-only | — | — | — | — |
+| Symbol | Trading Enabled | Cancel Only | Capability | Dry Price | Dry Qty | Matcher | Fill proven | TradeIDs | OrderIDs | verifiedSafe |
+|--------|:---:|:---:|:---:|---|---|:---:|:---:|---|---|:---:|
+| vBTC_vUSDC | YES | NO | FILL_OK | 64242 | 0.0001 | YES | YES | 9439409,9439410 | 1274994735,1274994749 | NO |
+| WSOSO_vUSDC | YES | NO | FILL_OK | 0.4523 | 13.34 | YES | YES | 1742760,1742761 | 1274996500,1274996509 | NO |
+| vBNB_vUSDC | YES | NO | FILL_OK | 954.7 | 0.007 | YES | YES | 493349,493350 | 1274994962,1274995002 | NO |
 
 ## Unavailable
 
-| Symbol | Reason | Trading Enabled | Cancel Only | Maintenance | Gateway |
+| Symbol | Reason | Trading Enabled | Cancel Only | Maintenance | Capability |
 |--------|--------|:---:|:---:|:---:|:---:|
-| TESTBTC_vUSDC | Empty Ask Book | YES | NO | NO | FAIL |
-| TESTSHIB_vUSDC | Empty Ask Book | YES | NO | NO | FAIL |
-| TESTSOSO_vUSDC | Empty Ask Book | YES | NO | NO | FAIL |
-| vAAPL_vUSDC | Empty Ask Book | YES | NO | NO | FAIL |
-| vAAVE_vUSDC | Empty Ask Book | YES | NO | NO | FAIL |
-| vADA_vUSDC | Empty Ask Book | YES | NO | NO | FAIL |
-| vAMZN_vUSDC | Empty Ask Book | YES | NO | NO | FAIL |
-| vAVAX_vUSDC | Empty Ask Book | YES | NO | NO | FAIL |
-| vBNB_vUSDC | Spread too large | YES | NO | NO | PASS |
-| vDOGE_vUSDC | Empty Ask Book | YES | NO | NO | FAIL |
-| vETH_vUSDC | Spread too large | YES | NO | NO | PASS |
-| vGOOGL_vUSDC | Empty Ask Book | YES | NO | NO | FAIL |
-| vHYPE_vUSDC | Empty Ask Book | YES | NO | NO | FAIL |
-| vLINK_vUSDC | Empty Ask Book | YES | NO | NO | FAIL |
-| vLTC_vUSDC | Empty Ask Book | YES | NO | NO | FAIL |
-| vMAG7ssi_vUSDC | Empty Ask Book | YES | NO | NO | FAIL |
-| vMEMEssi_vUSDC | Empty Ask Book | YES | NO | NO | FAIL |
-| vMETA_vUSDC | Empty Ask Book | YES | NO | NO | FAIL |
-| vMSFT_vUSDC | Empty Ask Book | YES | NO | NO | FAIL |
-| vSHIB_vUSDC | Spread too large | YES | NO | NO | PASS |
-| vSOL_vUSDC | Empty Ask Book | YES | NO | NO | FAIL |
-| vTSLA_vUSDC | Empty Ask Book | YES | NO | NO | FAIL |
-| vUNI_vUSDC | Empty Ask Book | YES | NO | NO | FAIL |
-| vUSDT_vUSDC | Empty Ask Book | YES | NO | NO | FAIL |
-| vXAUt_vUSDC | Empty Ask Book | YES | NO | NO | FAIL |
-| vXRP_vUSDC | Empty Ask Book | YES | NO | NO | FAIL |
-| vZEC_vUSDC | Empty Ask Book | YES | NO | NO | FAIL |
-| WSOSO_vUSDC | Spread too large | YES | NO | NO | PASS |
+| TESTBTC_vUSDC | Empty Ask Book | YES | NO | NO | MATCHER_OK |
+| TESTSHIB_vUSDC | Empty Ask Book | YES | NO | NO | UNVERIFIED |
+| TESTSOSO_vUSDC | Empty Ask Book | YES | NO | NO | MATCHER_OK |
+| vAAPL_vUSDC | Empty Ask Book | YES | NO | NO | MATCHER_OK |
+| vAAVE_vUSDC | Cancel Only | YES | YES | NO | CANCEL_ONLY |
+| vADA_vUSDC | Cancel Only | YES | YES | NO | CANCEL_ONLY |
+| vAMZN_vUSDC | Empty Ask Book | YES | NO | NO | MATCHER_OK |
+| vAVAX_vUSDC | Empty Ask Book | YES | NO | NO | MATCHER_OK |
+| vDEFIssi_vUSDC | Cancel Only | YES | YES | NO | CANCEL_ONLY |
+| vDOGE_vUSDC | Cancel Only | YES | YES | NO | CANCEL_ONLY |
+| vETH_vUSDC | Cancel Only | YES | YES | NO | CANCEL_ONLY |
+| vGOOGL_vUSDC | Empty Ask Book | YES | NO | NO | MATCHER_OK |
+| vHYPE_vUSDC | Empty Ask Book | YES | NO | NO | MATCHER_OK |
+| vLINK_vUSDC | Empty Ask Book | YES | NO | NO | UNVERIFIED |
+| vLTC_vUSDC | Cancel Only | YES | YES | NO | CANCEL_ONLY |
+| vMAG7ssi_vUSDC | Empty Ask Book | YES | NO | NO | MATCHER_OK |
+| vMEMEssi_vUSDC | Cancel Only | YES | YES | NO | CANCEL_ONLY |
+| vMETA_vUSDC | Empty Ask Book | YES | NO | NO | MATCHER_OK |
+| vMSFT_vUSDC | Empty Ask Book | YES | NO | NO | MATCHER_OK |
+| vNVDA_vUSDC | Cancel Only | YES | YES | NO | CANCEL_ONLY |
+| vSHIB_vUSDC | Dry payload failed | YES | NO | NO | FILL_OK |
+| vSOL_vUSDC | Empty Ask Book | YES | NO | NO | MATCHER_OK |
+| vTSLA_vUSDC | Empty Ask Book | YES | NO | NO | MATCHER_OK |
+| vUNI_vUSDC | Cancel Only | YES | YES | NO | CANCEL_ONLY |
+| vUSDT_vUSDC | Empty Ask Book | YES | NO | NO | UNVERIFIED |
+| vUSSI_vUSDC | Cancel Only | YES | YES | NO | CANCEL_ONLY |
+| vXAUt_vUSDC | Empty Ask Book | YES | NO | NO | MATCHER_OK |
+| vXRP_vUSDC | Empty Ask Book | YES | NO | NO | MATCHER_OK |
+| vZEC_vUSDC | Empty Ask Book | YES | NO | NO | MATCHER_OK |
 
 ## Notes
 
 - FILLED in production requires executedQty > 0, trade history, and balance evidence.
-- Parent invest path uses connected wallet only — never deployer / eng key.
-- Eng key (if present) is for this verification script only.
-- Spread gate: max 5% mid-spread for eligibility.
+- `verifiedSafe` stays NO until explorer wallet transactions map to fills (GAP-5).
+- This report never claims live IOC submits; signed evidence comes from capability records / probe artifact.

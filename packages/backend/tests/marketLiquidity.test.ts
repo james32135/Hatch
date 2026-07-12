@@ -41,6 +41,26 @@ function eligibleSnap(
   partial: Partial<MarketSnapshot> & { symbol: string; marketId: number },
 ): MarketSnapshot {
   const meta = metaFor(partial.symbol, partial.marketId);
+  const now = new Date();
+  const capability = {
+    network: "testnet",
+    symbol: partial.symbol,
+    marketId: partial.marketId,
+    mode: "LIMIT_IOC" as const,
+    metadataTrading: true,
+    gatewayAccepted: true,
+    matcherAccepted: true,
+    canFill: true,
+    fillProven: true,
+    verifiedSafe: false as const,
+    cancelOnly: false,
+    reason: "test",
+    orderIDs: [1],
+    tradeIDs: ["t1"],
+    observedAt: now.toISOString(),
+    expiresAt: new Date(now.getTime() + 60_000).toISOString(),
+    source: "seed" as const,
+  };
   const elig = evaluateMarketEligibility({
     meta,
     bookData: {
@@ -50,6 +70,7 @@ function eligibleSnap(
     ticker: { quoteVolume: 1000 },
     notionalUsd: 6,
     gatewayReachable: true,
+    capability,
   });
   return {
     symbol: partial.symbol,
@@ -90,12 +111,16 @@ function eligibleSnap(
     tradingEnabled: true,
     cancelOnly: false,
     maintenance: false,
-    gatewayValidation: "PASS",
-    lastVerified: new Date().toISOString(),
+    gatewayValidation: "FILL_OK",
+    matcherCapable: true,
+    fillCapable: true,
+    verifiedSafe: false,
+    lastVerified: now.toISOString(),
     eligibility: elig,
     meta,
     ...partial,
     executable: partial.executable ?? true,
+    matcherCapable: partial.matcherCapable ?? true,
   };
 }
 
@@ -122,6 +147,18 @@ describe("eligibility engine", () => {
     expect(elig.eligible).toBe(false);
     expect(elig.cancelOnly).toBe(true);
     expect(elig.failReason).toBe("Cancel Only");
+  });
+
+  it("rejects dry-only TRADING markets without signed capability", () => {
+    const elig = evaluateMarketEligibility({
+      meta: metaFor("vNVDA_vUSDC", 27),
+      bookData: { bids: [["180", "10"]], asks: [["181", "10"]] },
+      notionalUsd: 6,
+      gatewayReachable: true,
+    });
+    expect(elig.eligible).toBe(false);
+    expect(elig.gatewayValidation).toBe("UNVERIFIED");
+    expect(elig.failReason).toMatch(/Unsigned|unmatched|capability/i);
   });
 
   it("rejects wide spread", () => {
@@ -181,12 +218,15 @@ describe("selectExecutionRoute", () => {
       symbol: "vETH_vUSDC",
       marketId: 2,
       executable: false,
-      rejectReasons: ["spread_ok"],
-      unavailableReason: "Spread too large",
-      gatewayValidation: "FAIL",
+      matcherCapable: false,
+      rejectReasons: ["signed_matcher_capable"],
+      unavailableReason: "Cancel Only",
+      gatewayValidation: "CANCEL_ONLY",
+      cancelOnly: true,
       score: 0,
     });
     bad.executable = false;
+    bad.matcherCapable = false;
     expect(() =>
       selectExecutionRoute({
         notionalUsd: 6,

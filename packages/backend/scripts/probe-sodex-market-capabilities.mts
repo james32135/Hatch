@@ -694,6 +694,18 @@ async function main() {
   const target = resolve(process.cwd(), "../../MARKET_PROBE_TESTNET.json");
   writeFileSync(target, `${JSON.stringify(result, null, 2)}\n`, "utf8");
   console.log(`Wrote ${target}`);
+
+  try {
+    const { reloadCapabilitiesFromProbe } = await import(
+      "../src/services/marketCapability.js"
+    );
+    const seeded = await reloadCapabilitiesFromProbe("testnet");
+    console.log(`Seeded capability store rows=${seeded}`);
+  } catch (error) {
+    console.warn(
+      `Capability seed skipped: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
 }
 
 main().catch((error) => {

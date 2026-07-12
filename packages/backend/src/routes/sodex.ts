@@ -30,6 +30,11 @@ import {
 } from "../services/orderFillVerify.js";
 import { enqueueJob } from "../jobs/queue.js";
 import { assertMarketStillExecutable } from "../services/marketLiquidity.js";
+import {
+  isCancelOnlyError,
+  recordCancelOnly,
+  recordMatcherAccepted,
+} from "../services/marketCapability.js";
 
 const relaySchema = z.object({
   method: z.enum(["GET", "POST", "DELETE"]).default("POST"),
@@ -385,12 +390,37 @@ export async function registerSodexRoutes(app: FastifyInstance): Promise<void> {
         hatchStatus = "FAILED";
       }
 
-      if (orderId) {
-        const sodexErr =
+      const sodexErr =
           (result.data as { error?: string; msg?: string; message?: string } | null)?.error ||
           (result.data as { error?: string; msg?: string; message?: string } | null)?.msg ||
           (result.data as { error?: string; msg?: string; message?: string } | null)?.message ||
           null;
+
+      const network = profile.id === "mainnet" ? "mainnet" : "testnet";
+      const symbolName = parsed.data.symbolName;
+      if (symbolName && isCancelOnlyError(sodexErr)) {
+        await recordCancelOnly({
+          network,
+          symbol: symbolName,
+          marketId: parsed.data.symbolId,
+          reason: String(sodexErr),
+          source: "relay",
+        });
+      } else if (
+        symbolName &&
+        hatchStatus === "SUBMITTED" &&
+        primaryLeg?.orderID
+      ) {
+        await recordMatcherAccepted({
+          network,
+          symbol: symbolName,
+          marketId: parsed.data.symbolId,
+          orderID: Number(primaryLeg.orderID),
+          source: "relay",
+        });
+      }
+
+      if (orderId) {
         await prisma.signedOrder.update({
           where: { id: orderId },
           data: {

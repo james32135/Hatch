@@ -63,6 +63,50 @@ export class SodexClient {
     return this.getPublic(`/accounts/${addr}/balances`, 10);
   }
 
+  /** Official: GET /accounts/{userAddress}/orders — open orders */
+  async openOrders(userAddress: string, opts?: { symbol?: string }): Promise<unknown> {
+    const addr = userAddress.toLowerCase();
+    const q = opts?.symbol ? `?symbol=${encodeURIComponent(opts.symbol)}` : "";
+    return this.getPublic(`/accounts/${addr}/orders${q}`, 5);
+  }
+
+  /** Official: GET /accounts/{userAddress}/orders/history */
+  async orderHistory(
+    userAddress: string,
+    opts?: { symbol?: string; limit?: number; startTime?: number; endTime?: number },
+  ): Promise<unknown> {
+    const addr = userAddress.toLowerCase();
+    const params = new URLSearchParams();
+    if (opts?.symbol) params.set("symbol", opts.symbol);
+    if (opts?.limit) params.set("limit", String(opts.limit));
+    if (opts?.startTime) params.set("startTime", String(opts.startTime));
+    if (opts?.endTime) params.set("endTime", String(opts.endTime));
+    const q = params.toString() ? `?${params}` : "";
+    return this.getPublic(`/accounts/${addr}/orders/history${q}`, 0);
+  }
+
+  /** Official: GET /accounts/{userAddress}/trades */
+  async userTrades(
+    userAddress: string,
+    opts?: {
+      symbol?: string;
+      orderID?: number;
+      limit?: number;
+      startTime?: number;
+      endTime?: number;
+    },
+  ): Promise<unknown> {
+    const addr = userAddress.toLowerCase();
+    const params = new URLSearchParams();
+    if (opts?.symbol) params.set("symbol", opts.symbol);
+    if (opts?.orderID != null) params.set("orderID", String(opts.orderID));
+    if (opts?.limit) params.set("limit", String(opts.limit));
+    if (opts?.startTime) params.set("startTime", String(opts.startTime));
+    if (opts?.endTime) params.set("endTime", String(opts.endTime));
+    const q = params.toString() ? `?${params}` : "";
+    return this.getPublic(`/accounts/${addr}/trades${q}`, 0);
+  }
+
   /** Official: GET /markets/tickers — spot mark prices */
   async marketsTickers(): Promise<unknown> {
     return this.getPublic("/markets/tickers", 5);

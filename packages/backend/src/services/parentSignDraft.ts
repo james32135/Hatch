@@ -1,9 +1,14 @@
 /**
  * Unsigned EIP-712 ExchangeAction drafts for parent wallets.
  * Backend NEVER signs — parent signs in-wallet, then POST /api/sodex/relay.
+ *
+ * Sizing rules (from live SoDEX markets/symbols):
+ * - Use network-specific symbol IDs (testnet vUSSI=24, mainnet vUSSI=26).
+ * - Respect minNotional (MAG7/USSI = $5 on both nets as of 2026-07-12).
+ * - Prefer live mid from /markets/tickers; else fail closed (no invented qty).
  */
 import type { Hex } from "viem";
-import { SODEX, SODEX_SYMBOLS } from "../config/addresses.js";
+import { SODEX } from "../config/addresses.js";
 import type { AllowanceSignHandoff } from "./allowanceHandoff.js";
 import { HatchError } from "../lib/errors.js";
 import {
@@ -21,6 +26,9 @@ import {
   type SpotOrderType,
   type SpotTimeInForce,
 } from "./spotOrders.js";
+import {
+  type SpotSymbolMeta,
+} from "./sodexSymbols.js";
 
 export interface ParentSignDraft {
   kind: "parent_sign_draft";
@@ -34,24 +42,17 @@ export interface ParentSignDraft {
   params: ReturnType<typeof buildBatchNewOrdersParams>;
   payloadHash: Hex;
   nonce: string;
-  /** Wallet signs this typed data; backend does not hold keys.
-   * `message.nonce` is a decimal string on the wire — wallets must BigInt() it. */
   typedData: {
     domain: ReturnType<typeof sodexDomain>;
     types: typeof SODEX_EXCHANGE_TYPES;
     primaryType: "ExchangeAction";
     message: { payloadHash: Hex; nonce: string };
   };
-  /** After wallet signs → POST /api/sodex/relay with these fields + apiSign */
   relayHints: {
     method: "POST";
     path: typeof SPOT_TRADE_BATCH_PATH;
     needApiSignPrefix: "0x01";
   };
-  /**
-   * Exact `/api/sodex/relay` body shape (apiSign filled by parent wallet).
-   * `body` is the SoDEX params object used in payloadHash.
-   */
   relayRequest: {
     method: "POST";
     path: typeof SPOT_TRADE_BATCH_PATH;
@@ -84,6 +85,7 @@ export interface ParentSignDraft {
     amountUsd: string;
     riskTier: string;
   };
+  sizingNote: string;
   note: string;
 }
 
@@ -94,32 +96,93 @@ function clOrdId(prefix: string): string {
   );
 }
 
-/**
- * Size MARKET BUY qty assuming vault token ≈ 1 USDC when no mid provided.
- * With mid: LIMIT at mid, qty = notional / mid.
- */
-function sizeLeg(notionalUsd: number, mid?: string): {
+function sizeLimitBuy(notionalUsd: number, mid: number, meta: SpotSymbolMeta): {
   type: SpotOrderType;
   timeInForce: SpotTimeInForce;
   price: string;
   quantity: string;
 } {
-  if (mid && Number(mid) > 0) {
-    const qty = notionalUsd / Number(mid);
-    return {
-      type: 1,
-      timeInForce: 1,
-      price: mid,
-      quantity: qty.toFixed(6),
-    };
+  if (!(mid > 0)) {
+    throw new HatchError(
+      "unavailable",
+      `No live mid for ${meta.name} — cannot size order without inventing a price`,
+      502,
+    );
   }
-  // MARKET IOC — qty in base ≈ USD when vault ~$1
+  if (notionalUsd + 1e-9 < meta.minNotional) {
+    throw new HatchError(
+      "notional_too_small",
+      `SoDEX requires minNotional $${meta.minNotional} for ${meta.name}. This leg is $${notionalUsd.toFixed(2)}. Raise the weekly allowance or invest a single leg ≥ $${meta.minNotional}.`,
+      400,
+    );
+  }
+  const step = meta.stepSize > 0 ? meta.stepSize : 0.01;
+  const prec = meta.quantityPrecision >= 0 ? meta.quantityPrecision : 2;
+  // Round UP so lot-size never drops under minNotional
+  const rawQty = Math.max(notionalUsd / mid, meta.minNotional / mid);
+  const stepped = Math.ceil(rawQty / step - 1e-12) * step;
+  if (stepped < meta.minQuantity) {
+    throw new HatchError(
+      "notional_too_small",
+      `Quantity ${stepped} below SoDEX minQuantity ${meta.minQuantity} for ${meta.name}`,
+      400,
+    );
+  }
+  const quantity = stepped.toFixed(prec);
+  const notionalCheck = Number(quantity) * mid;
+  if (notionalCheck + 1e-9 < meta.minNotional) {
+    throw new HatchError(
+      "notional_too_small",
+      `After lot-size rounding, notional $${notionalCheck.toFixed(4)} is below SoDEX minNotional $${meta.minNotional} for ${meta.name}`,
+      400,
+    );
+  }
+  // LIMIT IOC at mid — fill or expire honestly (no silent resting)
   return {
-    type: 2,
+    type: 1,
     timeInForce: 3,
-    price: "0",
-    quantity: notionalUsd.toFixed(6),
+    price: mid.toFixed(4),
+    quantity,
   };
+}
+
+/**
+ * Allocate allowance across MAG7/USSI respecting SoDEX minNotional.
+ * If total < minNotional → error.
+ * If total < 2×minNotional → single dominant leg (never invent two sub-min legs).
+ */
+export function allocateLegsForMinNotional(input: {
+  mag7Usd: number;
+  ussiUsd: number;
+  mag7: SpotSymbolMeta;
+  ussi: SpotSymbolMeta;
+}): Array<{ meta: SpotSymbolMeta; notionalUsd: number; kind: "mag7" | "ussi" }> {
+  const total = input.mag7Usd + input.ussiUsd;
+  const minNeed = Math.max(input.mag7.minNotional, input.ussi.minNotional);
+  if (total + 1e-9 < minNeed) {
+    throw new HatchError(
+      "notional_too_small",
+      `SoDEX minNotional is $${minNeed} for MAG7/USSI. Weekly allowance $${total.toFixed(2)} is too small to place a fillable order. Set allowance to at least $${minNeed}.`,
+      400,
+    );
+  }
+
+  const bothOk =
+    input.mag7Usd + 1e-9 >= input.mag7.minNotional &&
+    input.ussiUsd + 1e-9 >= input.ussi.minNotional;
+
+  if (bothOk) {
+    return [
+      { meta: input.mag7, notionalUsd: input.mag7Usd, kind: "mag7" },
+      { meta: input.ussi, notionalUsd: input.ussiUsd, kind: "ussi" },
+    ];
+  }
+
+  // Collapse into the larger intended sleeve (or USSI if equal)
+  if (input.mag7Usd >= input.ussiUsd) {
+    return [{ meta: input.mag7, notionalUsd: total, kind: "mag7" }];
+  }
+  return [{ meta: input.ussi, notionalUsd: total, kind: "ussi" }];
 }
 
 export function draftAllowanceParentSign(input: {
@@ -127,7 +190,8 @@ export function draftAllowanceParentSign(input: {
   accountID: number;
   network: "mainnet" | "testnet";
   nonce?: bigint | number | string;
-  mids?: { mag7?: string; ussi?: string };
+  symbols: { mag7: SpotSymbolMeta; ussi: SpotSymbolMeta };
+  mids: { mag7?: string; ussi?: string };
 }): ParentSignDraft {
   if (!Number.isFinite(input.accountID) || input.accountID <= 0) {
     throw new Error("accountID required for parent sign draft");
@@ -140,6 +204,13 @@ export function draftAllowanceParentSign(input: {
       ? input.nonce
       : BigInt(input.nonce ?? Date.now());
 
+  const planned = allocateLegsForMinNotional({
+    mag7Usd: input.handoff.suggestedNotional.mag7Usd,
+    ussiUsd: input.handoff.suggestedNotional.ussiUsd,
+    mag7: input.symbols.mag7,
+    ussi: input.symbols.ussi,
+  });
+
   const legs: ParentSignDraft["legs"] = [];
   const orderRows: Array<{
     symbolID: number;
@@ -151,41 +222,21 @@ export function draftAllowanceParentSign(input: {
     quantity: string;
   }> = [];
 
-  const mag7Usd = input.handoff.suggestedNotional.mag7Usd;
-  if (mag7Usd > 0) {
-    const sized = sizeLeg(mag7Usd, input.mids?.mag7);
-    const symbolID = SODEX_SYMBOLS.vMAG7ssi_vUSDC.id;
+  for (const leg of planned) {
+    const midStr = leg.kind === "mag7" ? input.mids.mag7 : input.mids.ussi;
+    const mid = midStr ? Number(midStr) : NaN;
+    const sized = sizeLimitBuy(leg.notionalUsd, mid, leg.meta);
+    const prefix = leg.kind === "mag7" ? "hm" : "hu";
     orderRows.push({
-      symbolID,
-      clOrdID: clOrdId("hm"),
+      symbolID: leg.meta.id,
+      clOrdID: clOrdId(prefix),
       side: 1,
       ...sized,
     });
     legs.push({
-      symbol: SODEX_SYMBOLS.vMAG7ssi_vUSDC.name,
-      symbolID,
-      notionalUsd: mag7Usd,
-      side: 1,
-      type: sized.type,
-      price: sized.price,
-      quantity: sized.quantity,
-    });
-  }
-
-  const ussiUsd = input.handoff.suggestedNotional.ussiUsd;
-  if (ussiUsd > 0) {
-    const sized = sizeLeg(ussiUsd, input.mids?.ussi);
-    const symbolID = SODEX_SYMBOLS.vUSSI_vUSDC.id;
-    orderRows.push({
-      symbolID,
-      clOrdID: clOrdId("hu"),
-      side: 1,
-      ...sized,
-    });
-    legs.push({
-      symbol: SODEX_SYMBOLS.vUSSI_vUSDC.name,
-      symbolID,
-      notionalUsd: ussiUsd,
+      symbol: leg.meta.name,
+      symbolID: leg.meta.id,
+      notionalUsd: leg.notionalUsd,
       side: 1,
       type: sized.type,
       price: sized.price,
@@ -200,6 +251,11 @@ export function draftAllowanceParentSign(input: {
   const payloadHash = payloadHashFromAction(SPOT_ACTION_BATCH_NEW, params);
   const domain = sodexDomain("spot", chainId);
   const primary = orderRows[0];
+
+  const sizingNote =
+    planned.length === 1
+      ? `Single leg ${planned[0].meta.name} @ $${planned[0].notionalUsd.toFixed(2)} (SoDEX minNotional enforced; dual-leg collapsed).`
+      : `Dual leg sized to live SoDEX minNotional + mid.`;
 
   return {
     kind: "parent_sign_draft",
@@ -248,11 +304,11 @@ export function draftAllowanceParentSign(input: {
       amountUsd: input.handoff.amountUsd,
       riskTier: input.handoff.riskTier,
     },
-    note: "UNSIGNED draft only. Parent wallet signs typedData (BigInt nonce); backend never custodies keys.",
+    sizingNote,
+    note: "UNSIGNED draft only. Parent wallet signs typedData (BigInt nonce); backend never custodies keys. Fill verified via SoDEX order history + trades after relay.",
   };
 }
 
-/** Fill apiSign into draft.relayRequest for POST /api/sodex/relay */
 export function relayBodyFromDraft(
   draft: ParentSignDraft | ParentCancelDraft,
   apiSign: string,

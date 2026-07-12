@@ -26,7 +26,8 @@ export type JobName =
   | "allowance_scheduler"
   | "lesson_generation"
   | "cleanup"
-  | "retry_drain";
+  | "retry_drain"
+  | "order_fill_verify";
 
 export interface JobPayload {
   id: string;

@@ -198,6 +198,15 @@ export function resolvePriceUsd(
   if (/usdc|usdt/i.test(symbol)) {
     return prices[symbol] ?? prices.USDC ?? prices.vUSDC ?? 1;
   }
+  if (/^(w)?soso$/i.test(symbol) || /wsoso/i.test(symbol)) {
+    return (
+      prices[symbol] ??
+      prices.SOSO ??
+      prices.WSOSO ??
+      prices.soso ??
+      null
+    );
+  }
   for (const c of candidates) {
     if (prices[c] !== undefined) return prices[c];
     const hit = Object.entries(prices).find(
@@ -229,6 +238,29 @@ export async function projectPortfolioUsd(
   // Stablecoin / vault quote peg — not invented market prices
   for (const peg of ["USDC", "vUSDC", "USDT", "vUSDT"]) {
     if (prices[peg] === undefined) prices[peg] = 1;
+  }
+  // Supplement with SoDEX lastPx for vault coins SoSoValue may omit (e.g. WSOSO)
+  try {
+    const { createSodexClient } = await import("../clients/sodex.js");
+    const { resolveProfile } = await import("../config/environment.js");
+    const { getEnv } = await import("../config/env.js");
+    const sodex = createSodexClient(resolveProfile(getEnv().HATCH_DEFAULT_PROFILE));
+    const tickers = await sodex.marketsTickers();
+    const list = Array.isArray((tickers as any)?.data)
+      ? (tickers as any).data
+      : Array.isArray(tickers)
+        ? tickers
+        : [];
+    for (const t of list) {
+      const sym = String(t.symbol ?? "");
+      const px = Number(t.lastPx ?? t.bidPx ?? 0);
+      if (!sym || !(px > 0)) continue;
+      const base = sym.split("_")[0];
+      if (base && prices[base] === undefined) prices[base] = px;
+      if (prices[sym] === undefined) prices[sym] = px;
+    }
+  } catch {
+    /* SoDEX ticker supplement is best-effort */
   }
   const components: PortfolioProjection["components"] = [];
   let total = 0;

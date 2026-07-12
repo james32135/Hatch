@@ -22,6 +22,12 @@ import { assertRelayBodyMatchesPayloadHash } from "../services/parentSignDraft.j
 import { draftCancelParentSign } from "../services/parentSignDraft.js";
 import { resolveParentSodexAccountId } from "../services/parentAccountId.js";
 import { SPOT_ACTION_BATCH_CANCEL, SPOT_ACTION_BATCH_NEW } from "../services/spotOrders.js";
+import {
+  parseBatchRelayResponse,
+  pollUntilTerminal,
+  verifySignedOrderAgainstSodex,
+} from "../services/orderFillVerify.js";
+import { enqueueJob } from "../jobs/queue.js";
 
 const relaySchema = z.object({
   method: z.enum(["GET", "POST", "DELETE"]).default("POST"),
@@ -281,13 +287,35 @@ export async function registerSodexRoutes(app: FastifyInstance): Promise<void> {
         },
       );
 
+      const parsedRelay = parseBatchRelayResponse(result.data);
+      const httpOk = result.status >= 200 && result.status < 300;
+      const primaryLeg =
+        parsedRelay.legs.find((l) => l.clOrdID === parsed.data.clOrdId) ||
+        parsedRelay.legs[0];
+
+      let hatchStatus: "SUBMITTED" | "FAILED" | "REJECTED" = "FAILED";
+      if (httpOk && parsedRelay.accepted) hatchStatus = "SUBMITTED";
+      else if (httpOk && parsedRelay.topCode === 0 && primaryLeg && !primaryLeg.ok) {
+        hatchStatus = "REJECTED";
+      } else if (!httpOk || parsedRelay.topCode !== 0) {
+        hatchStatus = "FAILED";
+      }
+
       if (orderId) {
         await prisma.signedOrder.update({
           where: { id: orderId },
           data: {
-            status: result.status >= 200 && result.status < 300 ? "SUBMITTED" : "FAILED",
-            sodexResponseJson: result.data as object,
-            error: result.status >= 300 ? `HTTP ${result.status}` : null,
+            status: hatchStatus,
+            sodexOrderId: primaryLeg?.orderID ?? null,
+            sodexResponseJson: {
+              httpStatus: result.status,
+              relay: result.data,
+              parsedLegs: parsedRelay.legs,
+            } as object,
+            error:
+              hatchStatus === "SUBMITTED"
+                ? null
+                : `relay_rejected topCode=${parsedRelay.topCode} legCode=${primaryLeg?.code ?? "n/a"} HTTP ${result.status}`,
           },
         });
       }
@@ -303,19 +331,84 @@ export async function registerSodexRoutes(app: FastifyInstance): Promise<void> {
             method: parsed.data.method,
             status: result.status,
             signedOrderId: orderId ?? null,
+            sodexOrderId: primaryLeg?.orderID ?? null,
+            relayAccepted: parsedRelay.accepted,
             engWallet: isEngSodexTestWallet(req.user.wallet),
             at: new Date().toISOString(),
           },
         },
       });
 
+      let verification = null;
+      if (orderId && hatchStatus === "SUBMITTED") {
+        try {
+          verification = await pollUntilTerminal({
+            signedOrderId: orderId,
+            profile,
+            wallet: req.user.wallet,
+            timeoutMs: 22_000,
+            intervalMs: 1_500,
+          });
+        } catch (err) {
+          verification = {
+            error: err instanceof Error ? err.message : String(err),
+          };
+        }
+        await enqueueJob("order_fill_verify", {
+          signedOrderId: orderId,
+          wallet: req.user.wallet,
+          profileId: profile.id,
+          childId: parsed.data.childId,
+        });
+      }
+
       return {
         relayed: true,
         status: result.status,
         data: result.data,
         signedOrderId: orderId,
+        sodexOrderId: primaryLeg?.orderID ?? null,
+        hatchStatus,
+        relayAccepted: parsedRelay.accepted,
+        verification,
         verified: true,
+        note:
+          hatchStatus === "SUBMITTED"
+            ? "Relay accepted by SoDEX. Fill status comes from order history / trades — never assumed from HTTP alone."
+            : "Relay was not accepted as a live order. See error / verification.",
       };
+    },
+  );
+
+  app.get(
+    "/api/sodex/orders/:signedOrderId/verification",
+    { preHandler: [app.authenticate] },
+    async (req) => {
+      if (req.user.role !== "parent" && req.user.role !== "child") {
+        throw new HatchError("forbidden", "Auth required", 403);
+      }
+      const { signedOrderId } = req.params as { signedOrderId: string };
+      const row = await getPrisma().signedOrder.findUnique({
+        where: { id: signedOrderId },
+      });
+      if (!row) throw new HatchError("not_found", "Order not found", 404);
+      if (req.user.role === "parent" && row.parentId !== req.user.sub) {
+        throw new HatchError("forbidden", "Not your order", 403);
+      }
+      if (req.user.role === "child" && row.childId !== req.user.childId) {
+        throw new HatchError("forbidden", "Wrong child token", 403);
+      }
+      const profile = profileFromRequest(req);
+      const parent = await getPrisma().user.findUnique({
+        where: { id: row.parentId },
+      });
+      if (!parent) throw new HatchError("not_found", "Parent missing", 404);
+      const verification = await verifySignedOrderAgainstSodex({
+        signedOrderId,
+        profile,
+        wallet: parent.walletAddress,
+      });
+      return { verification, backendTime: new Date().toISOString() };
     },
   );
 }

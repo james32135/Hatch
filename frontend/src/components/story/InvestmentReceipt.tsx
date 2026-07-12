@@ -28,9 +28,9 @@ type OrderLike = {
 
 function toneFor(status: string): "ok" | "warn" | "danger" | "info" {
   const s = status.toUpperCase();
-  if (["FILLED", "DONE", "COMPLETED", "SUCCESS", "SUBMITTED"].some((x) => s.includes(x))) return "ok";
-  if (["FAILED", "REJECTED", "CANCELLED", "CANCELED"].some((x) => s.includes(x))) return "danger";
-  if (["PENDING", "OPEN", "NEW"].some((x) => s.includes(x))) return "warn";
+  if (["FILLED", "DONE", "COMPLETED", "SUCCESS"].some((x) => s.includes(x))) return "ok";
+  if (["FAILED", "REJECTED", "CANCELLED", "CANCELED", "EXPIRED"].some((x) => s.includes(x))) return "danger";
+  if (["PENDING", "OPEN", "NEW", "SUBMITTED", "WAITING"].some((x) => s.includes(x))) return "warn";
   return "info";
 }
 

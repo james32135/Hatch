@@ -69,6 +69,25 @@ async function dispatch(job: JobPayload): Promise<void> {
       await generateLessonForChild({ childId });
       break;
     }
+    case "order_fill_verify": {
+      const signedOrderId = String(job.data.signedOrderId ?? "");
+      const wallet = String(job.data.wallet ?? "");
+      if (!signedOrderId || !wallet) {
+        throw new Error("order_fill_verify requires signedOrderId + wallet");
+      }
+      const profile = resolveProfile(
+        String(job.data.profileId ?? getEnv().HATCH_DEFAULT_PROFILE),
+      );
+      const { verifySignedOrderAgainstSodex } = await import(
+        "../services/orderFillVerify.js"
+      );
+      await verifySignedOrderAgainstSodex({
+        signedOrderId,
+        profile,
+        wallet,
+      });
+      break;
+    }
     case "cleanup":
       await runCleanup();
       break;

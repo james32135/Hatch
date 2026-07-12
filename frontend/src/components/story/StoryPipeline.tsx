@@ -30,20 +30,32 @@ const DEFAULT_LABELS: Record<PipelineStepId, string> = {
   recorded: "Recorded on ValueChain",
 };
 
-/** Derive pipeline from live allowance / order / lesson / health signals. */
+/** Derive pipeline from live signals. Later steps cannot complete before earlier ones. */
 export function derivePipeline(input: {
   hasPolicy?: boolean;
   policyPaused?: boolean;
   pendingHandoff?: boolean;
   hasRelay?: boolean;
   orderStatus?: string | null;
+  sodexStatus?: string | null;
   hasHoldingsOrTx?: boolean;
   hasLesson?: boolean;
   valuechainOk?: boolean;
+  valuechainRecorded?: boolean;
+  waitingForMatch?: boolean;
 }): PipelineStep[] {
-  const order = String(input.orderStatus || "").toUpperCase();
-  const filled = ["FILLED", "DONE", "COMPLETED", "SUCCESS"].some((s) => order.includes(s));
-  const submitted = filled || ["SUBMITTED", "PENDING", "OPEN", "NEW"].some((s) => order.includes(s)) || !!input.hasRelay;
+  const order = String(input.orderStatus || input.sodexStatus || "").toUpperCase();
+  const filled = ["FILLED", "DONE", "COMPLETED"].some((s) => order.includes(s));
+  const rejected = ["REJECTED", "FAILED", "EXPIRED", "CANCELED", "CANCELLED"].some((s) =>
+    order.includes(s),
+  );
+  const submitted =
+    filled ||
+    rejected ||
+    ["SUBMITTED", "PENDING", "OPEN", "NEW", "WAITING_FOR_MATCH", "PARTIALLY_FILLED"].some((s) =>
+      order.includes(s),
+    ) ||
+    !!input.hasRelay;
   const signed = submitted || !!input.hasRelay;
   const waiting = !!input.pendingHandoff && !signed;
   const scheduled = !!input.hasPolicy && !input.policyPaused;
@@ -53,11 +65,21 @@ export function derivePipeline(input: {
     waiting: waiting || signed,
     signed,
     submitted,
-    filled: filled || (!!input.hasHoldingsOrTx && submitted),
-    portfolio: !!input.hasHoldingsOrTx,
-    lesson: !!input.hasLesson,
-    recorded: !!input.valuechainOk && (submitted || !!input.hasLesson),
+    filled: filled && submitted,
+    portfolio: filled && !!input.hasHoldingsOrTx,
+    lesson: filled && !!input.hasHoldingsOrTx && !!input.hasLesson,
+    recorded:
+      filled &&
+      !!input.hasHoldingsOrTx &&
+      (!!input.valuechainRecorded || (!!input.valuechainOk && !!input.hasLesson)),
   };
+
+  if (input.waitingForMatch && submitted && !filled && !rejected) {
+    flags.filled = false;
+    flags.portfolio = false;
+    flags.lesson = false;
+    flags.recorded = false;
+  }
 
   const orderIds = Object.keys(DEFAULT_LABELS) as PipelineStepId[];
   let foundActive = false;

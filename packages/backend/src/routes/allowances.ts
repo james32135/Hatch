@@ -12,6 +12,10 @@ import {
   type AllowanceSignHandoff,
 } from "../services/allowanceHandoff.js";
 import { draftAllowanceParentSign } from "../services/parentSignDraft.js";
+import {
+  resolveHatchIndexSymbols,
+  resolveMidsFromTickers,
+} from "../services/sodexSymbols.js";
 import { resolveParentSodexAccountId } from "../services/parentAccountId.js";
 
 const policySchema = z.object({
@@ -138,18 +142,43 @@ export async function registerAllowanceRoutes(app: FastifyInstance): Promise<voi
         refreshIfMissing: parsed.data.refreshAccountId ?? true,
       });
 
+      const symbols = await resolveHatchIndexSymbols(profile);
+      const liveMids = await resolveMidsFromTickers(profile, [
+        symbols.mag7.name,
+        symbols.ussi.name,
+      ]);
+      const mids = {
+        mag7: parsed.data.mids?.mag7 ?? liveMids[symbols.mag7.name],
+        ussi: parsed.data.mids?.ussi ?? liveMids[symbols.ussi.name],
+      };
+      if (!mids.mag7 && !mids.ussi) {
+        throw new HatchError(
+          "unavailable",
+          "No live SoDEX mids for MAG7/USSI — cannot size a fillable order without inventing prices",
+          502,
+        );
+      }
+
       const draft = draftAllowanceParentSign({
         handoff,
         accountID: resolved.accountID,
         network,
         nonce: parsed.data.nonce,
-        mids: parsed.data.mids,
+        symbols: { mag7: symbols.mag7, ussi: symbols.ussi },
+        mids,
       });
 
       return {
         draft,
         accountID: resolved.accountID,
         accountIdSource: resolved.source,
+        symbols: {
+          mag7: symbols.mag7,
+          ussi: symbols.ussi,
+          network: symbols.network,
+        },
+        mids,
+        sizingNote: draft.sizingNote,
         note: "UNSIGNED. Sign typedData in parent wallet, set apiSign on draft.relayRequest, then POST /api/sodex/relay.",
       };
     },

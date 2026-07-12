@@ -28,7 +28,8 @@ export const SODEX = {
   },
 } as const;
 
-/** Live mainnet symbol IDs from GET /spot/markets/symbols (2026-07-11) */
+/** Live mainnet defaults — always resolve via markets/symbols at draft time for the active network.
+ * Testnet vUSSI id is 24 (not 26). minNotional MAG7/USSI = 5 on both nets (verified 2026-07-12). */
 export const SODEX_SYMBOLS = {
   vMAG7ssi_vUSDC: { id: 3, name: "vMAG7ssi_vUSDC", baseCoin: "vMAG7.ssi" },
   vUSSI_vUSDC: { id: 26, name: "vUSSI_vUSDC", baseCoin: "vUSSI" },

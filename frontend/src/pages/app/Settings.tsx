@@ -1,9 +1,9 @@
 import { useSession } from "@/hooks/useSession";
 import { SectionCard } from "@/components/common/SectionCard";
 import { AdvancedDetails } from "@/components/common/AdvancedDetails";
+import { NetworkEnvironment } from "@/components/story/NetworkEnvironment";
 import { useAccount } from "wagmi";
 import { shortAddr } from "@/lib/format";
-import { friendlyProfile } from "@/lib/copy";
 import { Button } from "@/components/ui/button";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { api, HatchProfile } from "@/lib/api";
@@ -11,9 +11,9 @@ import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 
 const profiles: { id: HatchProfile; label: string; hint: string }[] = [
-  { id: "mainnet", label: "Live network", hint: "Real markets" },
-  { id: "testnet", label: "Practice network", hint: "Safe to explore" },
-  { id: "mainnet-readonly", label: "Live · view only", hint: "No new investments" },
+  { id: "mainnet", label: "Mainnet", hint: "Real markets" },
+  { id: "testnet", label: "Testnet", hint: "Practice · safe to explore" },
+  { id: "mainnet-readonly", label: "Mainnet · view only", hint: "No new investments" },
 ];
 
 export default function Settings() {
@@ -24,12 +24,15 @@ export default function Settings() {
     <div className="max-w-2xl space-y-4">
       <h1 className="text-2xl font-medium tracking-tight">Settings</h1>
 
-      <SectionCard title="Your wallet">
+      <SectionCard title="Wallet" subtitle="Connected account">
         <div className="font-mono text-sm text-white/70">{address ? shortAddr(address) : "Not connected"}</div>
       </SectionCard>
 
-      <SectionCard title="Network" subtitle="Choose where investments run. Practice is great while you learn.">
-        <div className="flex flex-wrap gap-2">
+      <SectionCard
+        title="Current environment"
+        subtitle="Mainnet and testnet stay separate. Switch carefully."
+      >
+        <div className="mb-4 flex flex-wrap gap-2">
           {profiles.map((p) => (
             <Button
               key={p.id}
@@ -37,12 +40,14 @@ export default function Settings() {
               variant={p.id === profile ? "default" : "secondary"}
               className={p.id === profile ? "bg-white text-black hover:bg-white/90" : "bg-white/5 hover:bg-white/10"}
               onClick={() => setProfile(p.id)}
+              title={p.hint}
             >
               {p.label}
             </Button>
           ))}
         </div>
-        <p className="mt-3 text-xs text-white/45">Currently: {friendlyProfile(profile)}</p>
+        <p className="mb-4 text-xs text-white/45">Switch network · {profiles.find((p) => p.id === profile)?.hint}</p>
+        <NetworkEnvironment wallet={address} showSwitchHint />
       </SectionCard>
 
       <ChildViewHelper />
@@ -91,7 +96,7 @@ function ChildViewHelper() {
   });
 
   return (
-    <SectionCard title="Open child view" subtitle="A read-only link. They can look and learn, not invest.">
+    <SectionCard title="Open child view" subtitle="Read-only. They can look and learn, not invest, sign, or change settings.">
       {children.length === 0 ? (
         <p className="text-sm text-white/50">Add a child first.</p>
       ) : (

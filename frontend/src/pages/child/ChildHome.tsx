@@ -1,13 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import { fmtUsd, fmtPct, fmtRelative } from "@/lib/format";
-import { resolvePortfolioUsd } from "@/lib/portfolio";
+import { fmtUsd, fmtPct } from "@/lib/format";
+import { resolveLivePortfolioUsd, portfolioFreshness } from "@/lib/portfolio";
+import { PortfolioBalanceHero } from "@/components/story/PortfolioBalanceHero";
 import { TokenMark } from "@/lib/tokenIcons";
 import { friendlyMarket } from "@/lib/copy";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Unavailable } from "@/components/common/Unavailable";
 
 export default function ChildHome() {
   const me = useQuery({ queryKey: ["me"], queryFn: () => api.get<any>("/api/auth/me") });
@@ -16,10 +16,12 @@ export default function ChildHome() {
     queryKey: ["portfolio", childId],
     queryFn: () => api.get<any>(`/api/portfolio/${childId}`),
     enabled: !!childId,
+    refetchInterval: 20_000,
   });
 
-  const total = resolvePortfolioUsd(p.data);
-  const day = p.data?.performance?.pnlPct ?? p.data?.performance?.dayChangePct;
+  const total = resolveLivePortfolioUsd(p.data);
+  const fresh = portfolioFreshness(p.data);
+  const pnlPct = p.data?.performance?.pnlPct;
   const holdings = (p.data?.holdings || []).slice(0, 4);
   const name = me.data?.displayName || me.data?.child?.displayName || "friend";
 
@@ -29,7 +31,7 @@ export default function ChildHome() {
         <div className="text-sm text-white/50">Hey {name}</div>
         <h1 className="mt-1 text-2xl font-medium tracking-tight text-white">Your growing money</h1>
         <p className="mt-2 max-w-md text-sm text-white/55">
-          This number goes up and down. That is normal. What matters is keeping the habit, week after week.
+          This number comes from your parent&apos;s real trading account. You can look and learn. You cannot invest or change anything.
         </p>
       </div>
 
@@ -43,23 +45,22 @@ export default function ChildHome() {
           </circle>
         </svg>
         <div className="text-xs uppercase tracking-widest text-white/40">Your portfolio</div>
-        {total == null ? (
-          <Unavailable />
-        ) : (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mt-3 text-6xl font-medium tracking-tight md:text-7xl"
-          >
-            {fmtUsd(total)}
-          </motion.div>
-        )}
-        {day != null && (
+        <div className="mt-3">
+          <PortfolioBalanceHero
+            portfolio={p.data}
+            loading={p.isLoading}
+            className="text-6xl font-medium tracking-tight md:text-7xl"
+          />
+        </div>
+        {total != null && pnlPct != null && (
           <div
-            className={`mt-2 text-lg ${Number(day) >= 0 ? "text-[hsl(142_71%_55%)]" : "text-[hsl(350_89%_65%)]"}`}
+            className={`mt-2 text-lg ${Number(pnlPct) >= 0 ? "text-[hsl(142_71%_55%)]" : "text-[hsl(350_89%_65%)]"}`}
           >
-            {fmtPct(day, { sign: true })} {p.data?.performance?.pnlPct != null ? "since you started" : "today"}
+            {fmtPct(pnlPct, { sign: true })} since you started
           </div>
+        )}
+        {fresh.sharedAccount && total != null && (
+          <p className="mt-2 text-xs text-white/40">From your parent&apos;s live SoDEX account</p>
         )}
       </div>
 
@@ -67,31 +68,41 @@ export default function ChildHome() {
         <div>
           <div className="mb-3 text-sm text-white/60">What you own</div>
           <div className="grid gap-2 sm:grid-cols-2">
-            {holdings.map((h: any, i: number) => (
-              <motion.div
-                key={i}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.05 }}
-                className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3"
-              >
-                <TokenMark symbol={h.symbol || h.token} size={36} />
-                <div>
-                  <div className="text-sm font-medium">{friendlyMarket(h.symbol || h.token)}</div>
-                  <div className="text-xs text-white/45">{fmtUsd(h.usdValue ?? h.valueUsd)}</div>
-                </div>
-              </motion.div>
-            ))}
+            {holdings.map((h: any, i: number) => {
+              const usd = h.usdValue ?? h.valueUsd;
+              const unpriced = usd == null || Number.isNaN(Number(usd));
+              return (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.05 }}
+                  className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3"
+                >
+                  <TokenMark symbol={h.symbol || h.token} size={36} />
+                  <div>
+                    <div className="text-sm font-medium">{friendlyMarket(h.symbol || h.token)}</div>
+                    <div className="text-xs text-white/45">
+                      {unpriced ? "Waiting for SSI confirmation" : fmtUsd(usd)}
+                    </div>
+                  </div>
+                </motion.div>
+              );
+            })}
           </div>
         </div>
       )}
 
       <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-6">
         <div className="text-sm text-white/60">Next allowance</div>
-        <div className="mt-1 text-2xl">
-          {p.data?.policy?.nextDueAt ? fmtRelative(p.data.policy.nextDueAt) : "Coming soon"}
-        </div>
-        <p className="mt-2 text-xs text-white/45">Your parent adds a little each week. You get to watch it grow.</p>
+        <div className="mt-1 text-2xl">Coming from your parent</div>
+        <p className="mt-2 text-xs text-white/45">
+          Your parent adds a little each week. You get to watch it grow. You cannot change the schedule from here.
+        </p>
+      </div>
+
+      <div className="rounded-2xl border border-white/8 bg-white/[0.015] px-4 py-3 text-xs text-white/45">
+        Read-only view · no signing · no trading · no settings · no network changes
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">

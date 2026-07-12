@@ -13,7 +13,12 @@ export default function ChildShell() {
       <header className="border-b border-white/5">
         <div className="mx-auto flex max-w-3xl items-center justify-between px-6 py-4">
           <Link to="/child" className="text-white"><HatchLogo /></Link>
-          <Button size="sm" variant="ghost" onClick={signOut}><LogOut className="h-4 w-4" /></Button>
+          <div className="flex items-center gap-2">
+            <span className="rounded-full border border-white/10 px-2.5 py-1 text-[10px] uppercase tracking-wider text-white/45">
+              Look only
+            </span>
+            <Button size="sm" variant="ghost" onClick={signOut}><LogOut className="h-4 w-4" /></Button>
+          </div>
         </div>
         <nav className="mx-auto flex max-w-3xl items-center gap-1 px-6 pb-3">
           <NavLink to="/child" end className={tab}>Today</NavLink>

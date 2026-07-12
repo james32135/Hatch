@@ -7,12 +7,14 @@ import { InfraStatus, useInfraLive } from "@/components/story/InfraStatus";
 import { ProductFlowSvg } from "@/components/story/ProductFlowSvg";
 import { StoryPipeline, derivePipeline } from "@/components/story/StoryPipeline";
 import { fmtUsd, fmtRelative } from "@/lib/format";
+import { resolveLivePortfolioUsd, portfolioFreshness } from "@/lib/portfolio";
 import { friendlyRisk, friendlyReadiness, friendlyLessonTitle } from "@/lib/copy";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Plus, ArrowRight, TrendingUp, Sparkles, Users, BookOpen, Calendar } from "lucide-react";
 import { motion } from "framer-motion";
 import { useMemo } from "react";
+import { NetworkEnvironment } from "@/components/story/NetworkEnvironment";
 
 export default function Dashboard() {
   const nav = useNavigate();
@@ -28,34 +30,12 @@ export default function Dashboard() {
 
   const children = me.data?.children || me.data?.user?.children || [];
 
-  const portfolios = useQuery({
-    queryKey: ["dashboard-portfolios", children.map((c: any) => c.id).join(",")],
-    queryFn: async () => {
-      const entries = await Promise.all(
-        children.map(async (c: any) => {
-          try {
-            const p = await api.get<any>(`/api/portfolio/${c.id}`);
-            const total =
-              p?.performance?.currentUsd ??
-              p?.projection?.totalUsd ??
-              p?.totalUsd ??
-              p?.latestSnapshot?.totalUsd ??
-              null;
-            const pnl = p?.performance?.pnlUsd ?? null;
-            const holdings = p?.holdings || [];
-            const txs = p?.transactions || [];
-            return [c.id, { total, pnl, hasAssets: holdings.length > 0 || txs.length > 0 }] as const;
-          } catch {
-            return [c.id, { total: null, pnl: null, hasAssets: false }] as const;
-          }
-        }),
-      );
-      return Object.fromEntries(entries) as Record<
-        string,
-        { total: number | null; pnl: number | null; hasAssets: boolean }
-      >;
-    },
-    enabled: children.length > 0,
+  // Parent SoDEX is shared — fetch once; never sum per-child (that double-counted).
+  const familyPortfolio = useQuery({
+    queryKey: ["dashboard-family-portfolio", children[0]?.id],
+    queryFn: () => api.get<any>(`/api/portfolio/${children[0].id}`),
+    enabled: !!children[0]?.id,
+    refetchInterval: 15_000,
   });
 
   const lessonsPreview = useQuery({
@@ -66,10 +46,11 @@ export default function Dashboard() {
 
   const pendingHandoffsEarly = (handoffs.data?.handoffs || []).length;
   const policiesEarly = allowances.data?.policies || [];
-  const totalsEarly = portfolios.data || {};
-  const hasAssetsEarly = Object.values(totalsEarly).some(
-    (v) => v.hasAssets || (v.total != null && Number(v.total) > 0),
-  );
+  const familyLiveEarly = resolveLivePortfolioUsd(familyPortfolio.data);
+  const hasAssetsEarly =
+    (familyLiveEarly != null && familyLiveEarly > 0) ||
+    (familyPortfolio.data?.holdings || []).length > 0 ||
+    (familyPortfolio.data?.transactions || []).length > 0;
   const latestLessonEarly = (lessonsPreview.data?.lessons || lessonsPreview.data || [])[0];
   const ordersList = ordersQ.data?.orders || ordersQ.data || [];
   const hasRelayEarly = Array.isArray(ordersList) && ordersList.length > 0;
@@ -134,11 +115,17 @@ export default function Dashboard() {
   }
 
   const pendingHandoffs = (handoffs.data?.handoffs || []).length;
-  const totals = portfolios.data || {};
-  const known = Object.values(totals)
-    .map((v) => v.total)
-    .filter((v) => v != null && !Number.isNaN(Number(v))) as number[];
-  const totalUsd = known.length ? known.reduce((s, n) => s + Number(n), 0) : null;
+  // One parent SoDEX account — never double-count across children.
+  const familyFresh = portfolioFreshness(familyPortfolio.data);
+  const totalUsd = resolveLivePortfolioUsd(familyPortfolio.data);
+  const investedHint =
+    totalUsd == null
+      ? familyFresh.waitingSsi || familyPortfolio.data?.sodexError
+        ? "Waiting for SSI confirmation"
+        : "Waiting for first investment"
+      : totalUsd === 0
+        ? "Waiting for first investment"
+        : "Family trading account · live SoDEX";
   const policies = allowances.data?.policies || [];
   const nextPolicy = policies
     .filter((p: any) => !p.paused && p.nextDueAt)
@@ -179,7 +166,7 @@ export default function Dashboard() {
         <OutcomeTile
           label="Invested so far"
           value={totalUsd == null ? "-" : fmtUsd(totalUsd)}
-          hint={totalUsd === 0 ? "Waiting for first investment" : "Across all children"}
+          hint={investedHint}
           icon={TrendingUp}
         />
         <OutcomeTile label="Children" value={String(children.length)} hint="Growing with you" icon={Users} />
@@ -213,11 +200,13 @@ export default function Dashboard() {
 
       <StoryPipeline steps={pipelineSteps} />
       <InfraStatus />
+      <NetworkEnvironment wallet={me.data?.user?.walletAddress || me.data?.walletAddress} />
 
       <div className="grid gap-4 lg:grid-cols-2">
         {children.map((c: any, i: number) => {
-          const row = totals[c.id];
-          const total = row?.total;
+          // Shared SoDEX — same live family total on every card (header is not summed).
+          const total = totalUsd;
+          const waiting = total == null && (familyFresh.waitingSsi || !!familyPortfolio.data?.sodexError);
           return (
             <motion.div
               key={c.id}
@@ -240,7 +229,11 @@ export default function Dashboard() {
                 </div>
                 <div className="mt-5 text-3xl font-medium tracking-tight">{total == null ? "-" : fmtUsd(total)}</div>
                 <div className="mt-1 text-xs text-white/45">
-                  {total === 0 ? "Ready for their first investment" : "Portfolio value"}
+                  {waiting
+                    ? "Waiting for SSI confirmation"
+                    : total === 0
+                      ? "Ready for their first investment"
+                      : "Shared family account · live SoDEX"}
                 </div>
                 <div className="mt-4 flex items-center gap-1.5 text-xs text-white/50 group-hover:text-white">
                   View portfolio <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />

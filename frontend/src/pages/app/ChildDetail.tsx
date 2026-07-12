@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Pause, Play, RefreshCw, UserSquare2 } from "lucide-react";
 import { toast } from "sonner";
 import { fmtUsd } from "@/lib/format";
-import { resolvePortfolioUsd } from "@/lib/portfolio";
+import { resolveLivePortfolioUsd, portfolioFreshness } from "@/lib/portfolio";
 import { friendlyRisk } from "@/lib/copy";
 import { StatusPip } from "@/components/common/StatusPip";
 
@@ -19,6 +19,7 @@ export default function ChildDetail() {
     queryKey: ["portfolio", childId],
     queryFn: () => api.get<any>(`/api/portfolio/${childId}`),
     enabled: !!childId,
+    refetchInterval: 15_000,
   });
 
   const togglePause = useMutation({
@@ -68,7 +69,18 @@ export default function ChildDetail() {
         <div className="flex items-center gap-3">
           <div className="text-right">
             <div className="text-xs text-white/45">Portfolio</div>
-            <div className="text-xl font-medium">{fmtUsd(resolvePortfolioUsd(portfolio.data))}</div>
+            <div className="text-xl font-medium">
+              {(() => {
+                const live = resolveLivePortfolioUsd(portfolio.data);
+                const fresh = portfolioFreshness(portfolio.data);
+                if (live != null) return fmtUsd(live);
+                if (fresh.waitingSsi || portfolio.data?.sodexError) return "Waiting…";
+                return "-";
+              })()}
+            </div>
+            <div className="text-[10px] text-white/35">
+              {portfolioFreshness(portfolio.data).live ? "Live SoDEX" : "Not live"}
+            </div>
           </div>
           <Button size="sm" variant="ghost" onClick={() => togglePause.mutate()} disabled={togglePause.isPending} aria-label="Pause or resume">
             {child?.paused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}

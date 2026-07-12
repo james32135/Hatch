@@ -1,17 +1,106 @@
-/** Resolve live portfolio USD from API response shapes. Never invents values. */
-export function resolvePortfolioUsd(p: any): number | null {
+/** Portfolio display helpers. Never invent balances. Prefer live SoDEX+SoSoValue only. */
+
+export type PortfolioFreshness = {
+  live: boolean;
+  source: "live" | "snapshot" | "unavailable";
+  pricedAt: string | null;
+  snapshotAt: string | null;
+  sodexError: string | null;
+  waitingSsi: boolean;
+  sharedAccount: boolean;
+};
+
+function finiteNum(v: unknown): number | null {
+  if (v === null || v === undefined) return null;
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Live USD only — never snapshot fallback. */
+export function resolveLivePortfolioUsd(p: any): number | null {
   if (!p) return null;
-  const candidates = [
-    p.performance?.currentUsd,
-    p.projection?.totalUsd,
-    p.totalUsd,
-    p.latestSnapshot?.totalUsd,
-  ];
-  for (const c of candidates) {
-    if (c === null || c === undefined) continue;
-    const n = typeof c === "number" ? c : Number(c);
-    if (Number.isFinite(n)) return n;
+  if (p.sodexError && !p.projection) return null;
+  for (const c of [p.performance?.currentUsd, p.projection?.totalUsd]) {
+    const n = finiteNum(c);
+    if (n != null) return n;
   }
+  // totalUsd is live only when projection exists (backend sets both from engine)
+  if (p.projection != null) {
+    const n = finiteNum(p.totalUsd);
+    if (n != null) return n;
+  }
+  return null;
+}
+
+/** Last known snapshot only — must be labeled as not live in UI. */
+export function resolveSnapshotPortfolioUsd(p: any): number | null {
+  if (!p?.latestSnapshot) return null;
+  return finiteNum(p.latestSnapshot.totalUsd);
+}
+
+/**
+ * Prefer live; expose whether UI must warn.
+ * Does NOT silently promote snapshot to live.
+ */
+export function resolvePortfolioUsd(p: any): number | null {
+  return resolveLivePortfolioUsd(p) ?? null;
+}
+
+export function portfolioFreshness(p: any): PortfolioFreshness {
+  const liveUsd = resolveLivePortfolioUsd(p);
+  const snapUsd = resolveSnapshotPortfolioUsd(p);
+  const warnings: string[] = p?.warnings || p?.projection?.warnings || [];
+  const waitingSsi = warnings.some((w) => /ssi|index|confirm/i.test(String(w)));
+  const pricedAt = p?.projection?.pricedAt ? String(p.projection.pricedAt) : null;
+  const snapshotAt = p?.latestSnapshot?.createdAt
+    ? String(p.latestSnapshot.createdAt)
+    : null;
+
+  if (liveUsd != null) {
+    return {
+      live: true,
+      source: "live",
+      pricedAt,
+      snapshotAt,
+      sodexError: p?.sodexError ? String(p.sodexError) : null,
+      waitingSsi,
+      sharedAccount: true,
+    };
+  }
+  if (snapUsd != null) {
+    return {
+      live: false,
+      source: "snapshot",
+      pricedAt,
+      snapshotAt,
+      sodexError: p?.sodexError ? String(p.sodexError) : null,
+      waitingSsi: waitingSsi || !!p?.sodexError,
+      sharedAccount: true,
+    };
+  }
+  return {
+    live: false,
+    source: "unavailable",
+    pricedAt,
+    snapshotAt,
+    sodexError: p?.sodexError ? String(p.sodexError) : null,
+    waitingSsi: true,
+    sharedAccount: true,
+  };
+}
+
+/** Signed order notional in USD. Never treat raw quantity as dollars. */
+export function orderNotionalUsd(o: {
+  quantity?: string | number | null;
+  price?: string | number | null;
+  notionalUsd?: number | null;
+  amountUsd?: number | null;
+}): number | null {
+  const direct = finiteNum(o.notionalUsd) ?? finiteNum(o.amountUsd);
+  if (direct != null) return direct;
+  const q = finiteNum(o.quantity);
+  const p = finiteNum(o.price);
+  if (q != null && p != null && p > 0) return q * p;
   return null;
 }
 

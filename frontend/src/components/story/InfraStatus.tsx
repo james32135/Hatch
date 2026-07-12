@@ -94,13 +94,22 @@ export function InfraStatus({ compact = false }: { compact?: boolean }) {
           <div className="text-sm font-medium text-white/90">Trusted infrastructure</div>
           {!compact && (
             <p className="mt-0.5 text-xs text-white/45">
-              Live connections powering HATCH on {friendlyProfile(live.profile)}.
+              {live.network === "mainnet" ? "Mainnet" : "Testnet"} · {friendlyProfile(live.profile)} · live connections
             </p>
           )}
         </div>
-        <Link to="/app/transparency" className="text-xs text-sky-200/80 hover:text-sky-100">
-          Transparency center
-        </Link>
+        <div className="flex items-center gap-3">
+          <span
+            className={`rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${
+              live.network === "mainnet" ? "bg-emerald-400/15 text-emerald-200" : "bg-sky-400/15 text-sky-200"
+            }`}
+          >
+            {live.network === "mainnet" ? "Mainnet" : "Testnet"}
+          </span>
+          <Link to="/app/transparency" className="text-xs text-sky-200/80 hover:text-sky-100">
+            Transparency center
+          </Link>
+        </div>
       </div>
 
       <div className={`mt-3 grid gap-2 ${compact ? "grid-cols-2 sm:grid-cols-5" : "grid-cols-2 sm:grid-cols-3 lg:grid-cols-5"}`}>

@@ -7,21 +7,7 @@ import { HatchError } from "../lib/errors.js";
 import { projectPortfolioUsd } from "../services/portfolioProjection.js";
 import { priceAccountState } from "../services/snapshotPricing.js";
 import { buildPortfolioEngineView } from "../services/portfolioEngine.js";
-
-async function assertChildAccess(
-  req: { user: { role: string; sub: string; childId?: string } },
-  childId: string,
-) {
-  const child = await getPrisma().child.findUnique({ where: { id: childId } });
-  if (!child) throw new HatchError("not_found", "Child not found", 404);
-  if (req.user.role === "parent" && child.parentId !== req.user.sub) {
-    throw new HatchError("forbidden", "Not your child", 403);
-  }
-  if (req.user.role === "child" && req.user.childId !== childId) {
-    throw new HatchError("forbidden", "Wrong child token", 403);
-  }
-  return child;
-}
+import { assertChildAccess } from "../lib/childAccess.js";
 
 export async function registerPortfolioRoutes(app: FastifyInstance): Promise<void> {
   app.get(
@@ -79,10 +65,26 @@ export async function registerPortfolioRoutes(app: FastifyInstance): Promise<voi
           .join("; ");
       }
 
-      const totalUsd =
-        engine?.performance?.currentUsd ??
-        engine?.projection?.totalUsd ??
-        (latest?.totalUsd != null ? Number(latest.totalUsd.toString()) : null);
+      const liveTotalUsd =
+        engine?.performance?.currentUsd ?? engine?.projection?.totalUsd ?? null;
+      const snapshotTotalUsd =
+        latest?.totalUsd != null ? Number(latest.totalUsd.toString()) : null;
+      // Never promote snapshot to live totalUsd — clients must label last-known separately.
+      const totalUsd = liveTotalUsd;
+      const freshness = {
+        live: liveTotalUsd != null && !sodexError,
+        source:
+          liveTotalUsd != null
+            ? ("live" as const)
+            : snapshotTotalUsd != null
+              ? ("snapshot" as const)
+              : ("unavailable" as const),
+        pricedAt: engine?.projection?.pricedAt ?? null,
+        snapshotAt: latest?.createdAt ?? null,
+        sodexError: sodexError ?? null,
+        sharedAccount: true,
+        note: "Parent SoDEX account is shared across children. Child view is read-only.",
+      };
 
       return {
         child: {
@@ -96,6 +98,9 @@ export async function registerPortfolioRoutes(app: FastifyInstance): Promise<voi
         sodexAccountState: accountState,
         sodexBalances: accountBalances,
         totalUsd,
+        liveTotalUsd,
+        snapshotTotalUsd,
+        freshness,
         projection: engine?.projection ?? null,
         warnings: engine?.projection?.warnings ?? [],
         holdings: engine?.holdings ?? [],
@@ -106,7 +111,7 @@ export async function registerPortfolioRoutes(app: FastifyInstance): Promise<voi
         staking: engine?.staking ?? null,
         sodexError,
         latestSnapshot: latest,
-        note: "Balances are parent SoDEX account reads. Child is view-only. No invented prices.",
+        note: "Balances are parent SoDEX account reads. Child is view-only. No invented prices. Snapshot is never shown as live.",
       };
     },
   );
@@ -136,15 +141,14 @@ export async function registerPortfolioRoutes(app: FastifyInstance): Promise<voi
     { preHandler: [app.authenticate] },
     async (req) => {
       const { childId } = req.params as { childId: string };
-      const child = await assertChildAccess(req, childId);
+      await assertChildAccess(req, childId);
+      // Prefer this child's orders. Shared SoDEX account still backs portfolio totals.
       const orders = await getPrisma().signedOrder.findMany({
-        where: {
-          OR: [{ childId }, { parentId: child.parentId }],
-        },
+        where: { childId },
         orderBy: { createdAt: "desc" },
         take: 100,
       });
-      return { childId, transactions: orders };
+      return { childId, parentWalletNote: "Shared parent SoDEX; timeline attributed by childId", transactions: orders };
     },
   );
 

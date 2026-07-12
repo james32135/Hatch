@@ -8,7 +8,7 @@ import { StatusPip } from "@/components/common/StatusPip";
 import { toast } from "sonner";
 import { fmtRelative, fmtUsd } from "@/lib/format";
 import { friendlyLessonTitle, friendlyLessonStatus, friendlyMarket } from "@/lib/copy";
-import { resolvePortfolioUsd } from "@/lib/portfolio";
+import { resolveLivePortfolioUsd } from "@/lib/portfolio";
 import { BookOpen } from "lucide-react";
 
 export default function ChildLessons() {
@@ -33,7 +33,7 @@ export default function ChildLessons() {
     onError: (e: any) => toast.error(e?.message || "Couldn't start a lesson"),
   });
   const items = lessons.data?.lessons || lessons.data || [];
-  const total = resolvePortfolioUsd(portfolio.data);
+  const total = resolveLivePortfolioUsd(portfolio.data);
   const holdings = portfolio.data?.holdings || [];
   const top = holdings
     .slice()

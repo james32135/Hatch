@@ -92,10 +92,15 @@ export async function registerSsiRoutes(app: FastifyInstance): Promise<void> {
     "/api/ssi/sync/portfolio",
     { preHandler: [app.authenticate] },
     async (req) => {
+      if (req.user.role !== "parent") {
+        throw new HatchError("forbidden_child_write", "Parents only", 403);
+      }
       const body = (req.body ?? {}) as { childId?: string };
       if (!body.childId) {
         throw new HatchError("invalid_body", "childId required", 400);
       }
+      const { assertChildAccess } = await import("../lib/childAccess.js");
+      await assertChildAccess(req, body.childId);
       const { enqueueJob } = await import("../jobs/queue.js");
       const job = await enqueueJob("portfolio_sync", {
         trigger: "ssi_sync",

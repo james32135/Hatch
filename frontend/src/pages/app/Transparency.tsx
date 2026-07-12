@@ -2,11 +2,13 @@ import type { ReactNode } from "react";
 import { useInfraLive } from "@/components/story/InfraStatus";
 import { ExplorerLinkCard } from "@/components/story/ExplorerLink";
 import { ProductFlowSvg } from "@/components/story/ProductFlowSvg";
+import { NetworkEnvironment } from "@/components/story/NetworkEnvironment";
 import { SectionCard } from "@/components/common/SectionCard";
 import { StatusPip } from "@/components/common/StatusPip";
 import { friendlyProfile } from "@/lib/copy";
 import { ExternalLink } from "lucide-react";
 import { motion } from "framer-motion";
+import { useAccount } from "wagmi";
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -19,6 +21,7 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
 
 export function Transparency() {
   const live = useInfraLive();
+  const { address } = useAccount();
   const m = live.metrics;
   const counts = m?.counts || {};
   const hatchLogAddr =
@@ -31,21 +34,24 @@ export function Transparency() {
     null;
   const scheduleAddr = scheduleRaw ? String(scheduleRaw) : null;
   const explorer = live.explorer || live.vc?.explorer;
+  const sodex = live.config?.sodex;
+  const vcNet = live.config?.valuechain?.[live.network];
+  const checks = live.health?.checks || {};
 
   return (
     <div className="space-y-5">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight text-white">Transparency</h1>
         <p className="mt-1 max-w-xl text-sm text-white/50">
-          Live systems behind HATCH. SoDEX places trades. SSI shapes indexes. ValueChain records what happened.
-          You always hold the keys.
+          Live systems behind HATCH. Every number in the app must come from these sources. HATCH never invents balances.
         </p>
       </div>
 
       <ProductFlowSvg />
+      <NetworkEnvironment wallet={address} />
 
       <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
-        <SectionCard title="System health" subtitle={`Profile: ${friendlyProfile(live.profile)}`}>
+        <SectionCard title="Live infrastructure" subtitle={`Profile: ${friendlyProfile(live.profile)}`}>
           <div className="space-y-1">
             <Row label="Backend">
               <StatusPip tone={live.backendOk ? "ok" : "danger"} label={live.backendOk ? "Live" : "Down"} />
@@ -68,7 +74,31 @@ export function Transparency() {
             <Row label="AI lessons">
               <StatusPip tone={live.aiOk ? "ok" : "warn"} label={live.aiOk ? "Connected" : "Check"} />
             </Row>
+            <Row label="Contracts">
+              <StatusPip
+                tone={hatchLogAddr || scheduleAddr ? "ok" : "warn"}
+                label={hatchLogAddr || scheduleAddr ? "Deployed" : "Pending"}
+              />
+            </Row>
+            <Row label="Explorer">
+              <StatusPip tone={explorer?.log ? "ok" : "warn"} label={explorer?.log ? "Linked" : "Check"} />
+            </Row>
             <Row label="Network">{live.network === "mainnet" ? "Mainnet" : "Testnet"}</Row>
+            <Row label="SoDEX endpoint">
+              <span className="font-mono text-[11px] text-white/60">
+                {(sodex?.spotRest || sodex?.baseUrl || "-").replace(/^https?:\/\//, "")}
+              </span>
+            </Row>
+            <Row label="ValueChain RPC">
+              <span className="font-mono text-[11px] text-white/60">
+                {(vcNet?.rpcUrl || "-").replace(/^https?:\/\//, "")}
+              </span>
+            </Row>
+            <Row label="SSI environment">Base · SoSoValue Indexes</Row>
+            <Row label="Backend environment">
+              {live.health?.profile || live.metrics?.profile || friendlyProfile(live.profile)}
+            </Row>
+            {checks.sodex?.latencyMs != null && <Row label="SoDEX latency">{`${checks.sodex.latencyMs} ms`}</Row>}
           </div>
         </SectionCard>
 
@@ -126,19 +156,29 @@ export function Transparency() {
         </div>
 
         <div className="mt-4 flex flex-wrap gap-3 text-xs">
-          {live.config?.sodex?.appUrl && (
-            <a href={live.config.sodex.appUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sky-200/80 hover:text-sky-100">
+          {sodex?.appUrl && (
+            <a
+              href={sodex.appUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 text-sky-200/80 hover:text-sky-100"
+            >
               SoDEX <ExternalLink className="h-3 w-3" />
             </a>
           )}
           {live.config?.ssiProtocol?.siteUrl && (
-            <a href={live.config.ssiProtocol.siteUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sky-200/80 hover:text-sky-100">
+            <a
+              href={live.config.ssiProtocol.siteUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 text-sky-200/80 hover:text-sky-100"
+            >
               SSI protocol <ExternalLink className="h-3 w-3" />
             </a>
           )}
-          {(explorer?.log || live.config?.valuechain?.[live.network]?.explorerUrl) && (
+          {(explorer?.log || vcNet?.explorerUrl) && (
             <a
-              href={explorer?.log || `${live.config?.valuechain?.[live.network]?.explorerUrl}`}
+              href={explorer?.log || `${vcNet?.explorerUrl}`}
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center gap-1 text-sky-200/80 hover:text-sky-100"

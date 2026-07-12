@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { HatchError } from "../lib/errors.js";
 import { getPrisma } from "../lib/prisma.js";
+import { requireParent, assertChildAccess } from "../lib/childAccess.js";
 import {
   DOCUMENTED_YIELD_ASSUMPTION_BANDS,
   projectGrowth,
@@ -30,12 +31,14 @@ export async function registerProjectionRoutes(
     "/api/projections/run",
     { preHandler: [app.authenticate] },
     async (req) => {
+      requireParent(req);
       const parsed = projectSchema.safeParse(req.body);
       if (!parsed.success) {
         throw new HatchError("invalid_body", parsed.error.message, 400);
       }
       let startingUsd = parsed.data.startingUsd ?? 0;
       if (parsed.data.childId) {
+        await assertChildAccess(req, parsed.data.childId);
         const snap = await getPrisma().portfolioSnapshot.findFirst({
           where: { childId: parsed.data.childId },
           orderBy: { createdAt: "desc" },
@@ -61,6 +64,7 @@ export async function registerProjectionRoutes(
     "/api/projections/scenarios",
     { preHandler: [app.authenticate] },
     async (req) => {
+      requireParent(req);
       const body = z
         .object({
           startingUsd: z.number().min(0).default(0),
@@ -75,6 +79,7 @@ export async function registerProjectionRoutes(
       }
       let startingUsd = body.data.startingUsd;
       if (body.data.childId) {
+        await assertChildAccess(req, body.data.childId);
         const snap = await getPrisma().portfolioSnapshot.findFirst({
           where: { childId: body.data.childId },
           orderBy: { createdAt: "desc" },
@@ -98,6 +103,7 @@ export async function registerProjectionRoutes(
     "/api/projections/sensitivity",
     { preHandler: [app.authenticate] },
     async (req) => {
+      requireParent(req);
       const body = z
         .object({
           startingUsd: z.number().min(0).default(0),

@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { getAiClient } from "../clients/ai/index.js";
 import { HatchError } from "../lib/errors.js";
 import { getEnv } from "../config/env.js";
+import { assertChildAccess, requireParent } from "../lib/childAccess.js";
 
 export async function registerAiRoutes(app: FastifyInstance): Promise<void> {
   app.get(
@@ -19,6 +20,7 @@ export async function registerAiRoutes(app: FastifyInstance): Promise<void> {
     { preHandler: [app.authenticate] },
     async (req) => {
       const { childId } = req.params as { childId: string };
+      await assertChildAccess(req, childId);
       const { getPrisma } = await import("../lib/prisma.js");
       const lessons = await getPrisma().lesson.findMany({
         where: { childId },
@@ -33,10 +35,9 @@ export async function registerAiRoutes(app: FastifyInstance): Promise<void> {
     "/api/lessons/:childId/generate",
     { preHandler: [app.authenticate] },
     async (req) => {
-      if (req.user.role !== "parent") {
-        throw new HatchError("forbidden_child_write", "Parents only", 403);
-      }
+      requireParent(req);
       const { childId } = req.params as { childId: string };
+      await assertChildAccess(req, childId);
       const body = (req.body ?? {}) as {
         triggerDelta?: number;
         kind?: "portfolio_delta" | "market_event" | "manual" | "age_intro";
@@ -61,6 +62,7 @@ export async function registerAiRoutes(app: FastifyInstance): Promise<void> {
     "/api/ai/chat",
     { preHandler: [app.authenticate] },
     async (req) => {
+      requireParent(req);
       const body = req.body as {
         messages?: Array<{ role: "system" | "user" | "assistant"; content: string }>;
         jsonMode?: boolean;

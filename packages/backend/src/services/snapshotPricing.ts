@@ -3,7 +3,7 @@
  * Never invents prices — USDC/vUSDC pegged at 1 only.
  */
 import {
-  extractBalances,
+  mergeBalanceSources,
   projectPortfolioUsd,
   type PortfolioProjection,
 } from "./portfolioProjection.js";
@@ -42,9 +42,13 @@ export interface SnapshotPricing {
 
 export async function priceAccountState(
   sodexAccountState: unknown,
+  sodexBalances?: unknown,
 ): Promise<SnapshotPricing> {
-  const balances = extractBalances(sodexAccountState);
-  const projection = await projectPortfolioUsd(sodexAccountState);
+  const balances = mergeBalanceSources(sodexBalances, sodexAccountState);
+  const projection = await projectPortfolioUsd(
+    sodexAccountState,
+    sodexBalances,
+  );
   return {
     totalUsd: projection.totalUsd,
     mag7Qty: pickQty(balances, MAG7_KEYS),

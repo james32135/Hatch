@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Pause, Play, RefreshCw, UserSquare2 } from "lucide-react";
 import { toast } from "sonner";
 import { fmtUsd } from "@/lib/format";
+import { resolvePortfolioUsd } from "@/lib/portfolio";
 import { StatusPip } from "@/components/common/StatusPip";
 import ChildPortfolio from "./ChildPortfolio";
 
@@ -23,7 +24,7 @@ export default function ChildDetail() {
     onError: (e: any) => toast.error(e?.message || "Failed"),
   });
   const snapshot = useMutation({
-    mutationFn: () => api.post<any>(`/api/portfolio/${childId}/snapshot`),
+    mutationFn: () => api.post<any>(`/api/portfolio/${childId}/snapshot`, {}),
     onSuccess: () => { toast.success("Snapshot refreshed"); qc.invalidateQueries({ queryKey: ["portfolio", childId] }); },
     onError: (e: any) => toast.error(e?.message || "Snapshot failed"),
   });
@@ -56,7 +57,7 @@ export default function ChildDetail() {
         <div className="flex items-center gap-3">
           <div className="text-right">
             <div className="text-xs text-white/50">Portfolio</div>
-            <div className="text-xl font-medium">{fmtUsd(portfolio.data?.latestSnapshot?.totalUsd ?? portfolio.data?.totalUsd)}</div>
+            <div className="text-xl font-medium">{fmtUsd(resolvePortfolioUsd(portfolio.data))}</div>
           </div>
           <Button size="sm" variant="ghost" onClick={() => togglePause.mutate()} disabled={togglePause.isPending}>
             {child?.paused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}

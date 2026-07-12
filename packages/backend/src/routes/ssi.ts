@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { createPublicClient, http, type Address } from "viem";
 import { base } from "viem/chains";
 import { getEnv } from "../config/env.js";
-import { BASE, TOKENS } from "../config/addresses.js";
+import { BASE, SSI_PROTOCOL, TOKENS } from "../config/addresses.js";
 import { getSoSoValueClient } from "../clients/sosovalue.js";
 import { HatchError } from "../lib/errors.js";
 import {
@@ -48,7 +48,8 @@ export async function registerSsiRoutes(app: FastifyInstance): Promise<void> {
     return {
       pathA: planMint({ index, amountUsd }),
       pathB: planPathBMint(),
-      note: "Path A preferred. Path B blocked until SSI router verified.",
+      note: "Path A preferred for parents. Path B blocked — WLP-only mint per Whitepaper §5.3.",
+      protocol: SSI_PROTOCOL,
     };
   });
 
@@ -123,7 +124,7 @@ export async function registerSsiRoutes(app: FastifyInstance): Promise<void> {
     });
     const addr = address as Address;
     try {
-      const [mag7, ussi, smag7] = await Promise.all([
+      const [mag7, ussi, smag7, defi, meme] = await Promise.all([
         client.readContract({
           address: TOKENS.mag7Ssi,
           abi: erc20BalanceOfAbi,
@@ -142,6 +143,18 @@ export async function registerSsiRoutes(app: FastifyInstance): Promise<void> {
           functionName: "balanceOf",
           args: [addr],
         }),
+        client.readContract({
+          address: TOKENS.defiSsi,
+          abi: erc20BalanceOfAbi,
+          functionName: "balanceOf",
+          args: [addr],
+        }),
+        client.readContract({
+          address: TOKENS.memeSsi,
+          abi: erc20BalanceOfAbi,
+          functionName: "balanceOf",
+          args: [addr],
+        }),
       ]);
       return {
         ok: true,
@@ -151,14 +164,19 @@ export async function registerSsiRoutes(app: FastifyInstance): Promise<void> {
           mag7Ssi: mag7.toString(),
           ussi: ussi.toString(),
           sMag7Ssi: smag7.toString(),
+          defiSsi: defi.toString(),
+          memeSsi: meme.toString(),
         },
         tokens: TOKENS,
+        protocol: SSI_PROTOCOL,
         explorer: {
           mag7: `${BASE.explorerUrl}/token/${TOKENS.mag7Ssi}?a=${addr}`,
           ussi: `${BASE.explorerUrl}/token/${TOKENS.ussi}?a=${addr}`,
           smag7: `${BASE.explorerUrl}/token/${TOKENS.sMag7Ssi}?a=${addr}`,
+          defi: `${BASE.explorerUrl}/token/${TOKENS.defiSsi}?a=${addr}`,
+          meme: `${BASE.explorerUrl}/token/${TOKENS.memeSsi}?a=${addr}`,
         },
-        note: "Base balances only. SoDEX vault balances come from SoDEX account state.",
+        note: "Base ERC-20 balances only. SoDEX vault balances come from GET /accounts/{addr}/balances.",
         defaultProfile: getEnv().HATCH_DEFAULT_PROFILE,
       };
     } catch (err) {

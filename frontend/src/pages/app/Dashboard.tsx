@@ -29,8 +29,9 @@ export default function Dashboard() {
           try {
             const p = await api.get<any>(`/api/portfolio/${c.id}`);
             const total =
-              p?.performance?.totalUsd ??
+              p?.performance?.currentUsd ??
               p?.projection?.totalUsd ??
+              p?.totalUsd ??
               p?.latestSnapshot?.totalUsd ??
               null;
             return [c.id, total] as const;
@@ -158,8 +159,8 @@ export default function Dashboard() {
         <SectionCard title="Infrastructure">
           <div className="space-y-2 text-sm">
             <Row label="SoDEX" tone={sodex.data?.nextStep === "READY" ? "ok" : "warn"} value={sodex.data?.nextStep || "—"} />
+            <Row label="SSI Path B (Base mint)" tone="warn" value="Blocked — WLP only" />
             <Row label="SSI Path A (SoDEX Vault)" tone={caps.data?.pathA_sodexVault?.mint ? "ok" : "warn"} value={caps.data?.pathA_sodexVault?.mint ? "Available" : "Unavailable"} />
-            <Row label="SSI Path B (Base mint)" tone={caps.data?.pathB_baseMint?.available ? "ok" : "warn"} value={caps.data?.pathB_baseMint?.available ? "Available" : "Blocked"} />
             <Row label="ValueChain audit" tone={vc.data?.ok ? "ok" : "warn"} value={vc.data?.ok ? "Verified" : "—"} />
           </div>
         </SectionCard>

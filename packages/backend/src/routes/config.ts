@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { getEnv } from "../config/env.js";
 import { resolveProfile, PROFILES } from "../config/environment.js";
-import { BASE, HATCH_CONTRACTS, SODEX_SYMBOLS, TOKENS, VALUECHAIN } from "../config/addresses.js";
+import { BASE, HATCH_CONTRACTS, SODEX_SYMBOLS, SSI_PROTOCOL, TOKENS, VALUECHAIN } from "../config/addresses.js";
 import { sodexGatewayMeta } from "../clients/sodex.js";
 import { getAiClient } from "../clients/ai/index.js";
 
@@ -16,6 +16,7 @@ export async function registerConfigRoutes(app: FastifyInstance): Promise<void> 
       hatchContracts: HATCH_CONTRACTS,
       base: BASE,
       tokens: TOKENS,
+      ssiProtocol: SSI_PROTOCOL,
       sodex: sodexGatewayMeta(profile),
       symbols: SODEX_SYMBOLS,
       custody: {

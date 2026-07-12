@@ -1,7 +1,8 @@
 /**
  * Verified on-chain / gateway addresses for HATCH.
- * Sources cited in IMPLEMENTATION.md §5 and §10.
- * Blank fields must stay blank until verified — never invent.
+ * SSI protocol + index tokens: SoSoValue Whitepaper §5.3 Solution Design
+ * (https://sosovalue-white-paper.gitbook.io/.../5.3-solution-design).
+ * Blank / optional env overrides must stay blank until verified — never invent.
  */
 
 export const SOSO_API_BASE_URL = "https://openapi.sosovalue.com/openapi/v1" as const;
@@ -58,18 +59,54 @@ export const BASE = {
   explorerUrl: "https://basescan.org",
 } as const;
 
-/** Base SSI / SOSO tokens — verified via BaseScan / official listings */
+/**
+ * Base SSI / SOSO tokens — Whitepaper §5.3 + BaseScan verified.
+ * Env overrides optional; never invent missing addresses.
+ */
 export const TOKENS = {
-  mag7Ssi: "0x9E6A46f294bB67c20F1D1E7AfB0bBEf614403B55" as const,
-  ussi: "0x3a46ed8FCeb6eF1ADA2E4600A522AE7e24D2Ed18" as const,
-  sMag7Ssi: "0x3d8f0ddb4bb9332Cb89dEC22d273d9be1a91530b" as const,
+  mag7Ssi:
+    (process.env.MAG7_SSI_TOKEN_ADDRESS as `0x${string}` | undefined) ??
+    ("0x9E6A46f294bB67c20F1D1E7AfB0bBEf614403B55" as const),
+  defiSsi:
+    (process.env.DEFI_SSI_TOKEN_ADDRESS as `0x${string}` | undefined) ??
+    ("0x164ffdaE2fe3891714bc2968f1875ca4fA1079D0" as const),
+  memeSsi:
+    (process.env.MEME_SSI_TOKEN_ADDRESS as `0x${string}` | undefined) ??
+    ("0xdd3acDBDc7b358Df453a6CB6bCA56C92aA5743aA" as const),
+  ussi:
+    (process.env.USSI_TOKEN_ADDRESS as `0x${string}` | undefined) ??
+    ("0x3a46ed8FCeb6eF1ADA2E4600A522AE7e24D2Ed18" as const),
+  sMag7Ssi:
+    (process.env.SMAG7_SSI_TOKEN_ADDRESS as `0x${string}` | undefined) ??
+    ("0x3d8f0ddb4bb9332Cb89dEC22d273d9be1a91530b" as const),
   sosoBase: "0x624e2e7fdc8903165f64891672267ab0fcb98831" as const,
   sosoEthereum: "0x76a0e27618462bdac7a29104bdcfff4e6bfcea2d" as const,
 } as const;
 
 /**
- * Fill after Foundry deploy (Phase 3).
- * SSI Router / Staking: discover via ssi.sosovalue.com txs — do not invent.
+ * Official SSI Protocol contracts on Base — Whitepaper §5.3 Key Addresses.
+ * On-chain mint/burn is WLP (KYB) only. HATCH parents use Path A (SoDEX vault).
+ * No invented "router" address — whitepaper lists swap/issuer/factory instead.
+ */
+export const SSI_PROTOCOL = {
+  chainId: 8453,
+  source:
+    "https://sosovalue-white-paper.gitbook.io/sosovalue-whitepaper/5.-sosovalue-indexes-new-approach-to-passive-crypto-investment-for-the-masses/5.3-solution-design",
+  swap: "0xF909bfa750721501B4F8433588FaE5cE303Db08B" as const,
+  factory: "0xb04eB6b64137d1673D46731C8f84718092c50B0D" as const,
+  issuer: "0x0306acEb4c20FF33480d90038F8b375cC6A6b66e" as const,
+  rebalancer: "0x84663e30973D552ac357FD04F3Ac6ebbD495Ab15" as const,
+  feeManager: "0x2E469365030F068eCB1176a0D5600bA470Cf07A9" as const,
+  stakeFactory: "0x585834242BB31427B1dC7486DD4BDe7c724e35c1" as const,
+  assetLocking: "0x935A4B1F6F3E891a226b2522ac22d45Ce5839383" as const,
+  protocolOwner: "0xd463D3d8333b7AD6a14d00e1700C80AF5A37F751" as const,
+  earnUrl: "https://ssi.sosovalue.com/earn",
+  siteUrl: "https://ssi.sosovalue.com",
+} as const;
+
+/**
+ * HATCH-deployed ValueChain contracts + optional SSI env overrides.
+ * Path B retail mint stays blocked (WLP-only per whitepaper).
  */
 export const HATCH_CONTRACTS = {
   mainnet: {
@@ -86,6 +123,8 @@ export const HATCH_CONTRACTS = {
       process.env.HATCH_SCHEDULE_ADDRESS_TESTNET ??
       "0x3db8750EE3a397b5A8A4e1842Bfb69f511342C6b",
   },
+  /** @deprecated Prefer SSI_PROTOCOL.swap / issuer — kept for env compatibility */
   ssiRouter: process.env.SSI_ROUTER_ADDRESS ?? "",
-  ssiStaking: process.env.SSI_STAKING_ADDRESS ?? "",
+  /** Optional override; official stakeFactory is SSI_PROTOCOL.stakeFactory */
+  ssiStaking: process.env.SSI_STAKING_ADDRESS ?? SSI_PROTOCOL.stakeFactory,
 } as const;

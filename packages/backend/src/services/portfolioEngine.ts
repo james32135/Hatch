@@ -131,6 +131,8 @@ export async function readBaseStakingState(wallet: string): Promise<{
   mag7Ssi: string;
   sMag7Ssi: string;
   ussi: string;
+  defiSsi: string;
+  memeSsi: string;
   note: string;
 } | null> {
   if (!/^0x[a-fA-F0-9]{40}$/.test(wallet)) return null;
@@ -139,7 +141,7 @@ export async function readBaseStakingState(wallet: string): Promise<{
     transport: http(process.env.BASE_RPC_URL ?? BASE.rpcUrl),
   });
   const addr = wallet as Address;
-  const [mag7, smag7, ussi] = await Promise.all([
+  const [mag7, smag7, ussi, defi, meme] = await Promise.all([
     client.readContract({
       address: TOKENS.mag7Ssi,
       abi: erc20BalanceOfAbi,
@@ -158,13 +160,27 @@ export async function readBaseStakingState(wallet: string): Promise<{
       functionName: "balanceOf",
       args: [addr],
     }),
+    client.readContract({
+      address: TOKENS.defiSsi,
+      abi: erc20BalanceOfAbi,
+      functionName: "balanceOf",
+      args: [addr],
+    }),
+    client.readContract({
+      address: TOKENS.memeSsi,
+      abi: erc20BalanceOfAbi,
+      functionName: "balanceOf",
+      args: [addr],
+    }),
   ]);
   return {
     chainId: BASE.chainId,
     mag7Ssi: mag7.toString(),
     sMag7Ssi: smag7.toString(),
     ussi: ussi.toString(),
-    note: "sMAG7.ssi > 0 indicates staked receipt on Base (SSI Earn). Path B router not required for reads.",
+    defiSsi: defi.toString(),
+    memeSsi: meme.toString(),
+    note: "sMAG7.ssi > 0 indicates staked receipt on Base (SSI Earn). Path B mint is WLP-only; parents use Path A.",
   };
 }
 
@@ -173,6 +189,7 @@ export async function buildPortfolioEngineView(input: {
   parentId: string;
   parentWallet: string;
   accountState: unknown | null;
+  accountBalances?: unknown | null;
 }): Promise<{
   holdings: HoldingRow[];
   performance: PortfolioPerformance;
@@ -184,9 +201,12 @@ export async function buildPortfolioEngineView(input: {
 }> {
   const prisma = getPrisma();
   let projection: PortfolioProjection | null = null;
-  if (input.accountState) {
+  if (input.accountState || input.accountBalances) {
     try {
-      projection = await projectPortfolioUsd(input.accountState);
+      projection = await projectPortfolioUsd(
+        input.accountState,
+        input.accountBalances,
+      );
     } catch {
       projection = null;
     }

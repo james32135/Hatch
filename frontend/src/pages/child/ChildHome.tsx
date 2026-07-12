@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { fmtUsd, fmtPct, fmtRelative } from "@/lib/format";
+import { resolvePortfolioUsd } from "@/lib/portfolio";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -11,8 +12,8 @@ export default function ChildHome() {
   const childId = me.data?.childId || me.data?.scopes?.childId;
   const p = useQuery({ queryKey: ["portfolio", childId], queryFn: () => api.get<any>(`/api/portfolio/${childId}`), enabled: !!childId });
 
-  const total = p.data?.latestSnapshot?.totalUsd ?? p.data?.totalUsd;
-  const day = p.data?.performance?.dayChangePct;
+  const total = resolvePortfolioUsd(p.data);
+  const day = p.data?.performance?.pnlPct ?? p.data?.performance?.dayChangePct;
 
   return (
     <div className="space-y-8">
@@ -25,7 +26,7 @@ export default function ChildHome() {
         )}
         {day != null && (
           <div className={`mt-2 text-lg ${Number(day) >= 0 ? "text-[hsl(142_71%_55%)]" : "text-[hsl(350_89%_65%)]"}`}>
-            {fmtPct(day, { sign: true })} today
+            {fmtPct(day, { sign: true })} {p.data?.performance?.pnlPct != null ? "vs cost basis" : "today"}
           </div>
         )}
       </div>

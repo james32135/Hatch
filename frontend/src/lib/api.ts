@@ -53,10 +53,14 @@ export async function apiRequest<T = any>(
 ): Promise<T> {
   const { auth = true, headers, ...rest } = init;
   const finalHeaders: Record<string, string> = {
-    "Content-Type": "application/json",
     "X-HATCH-Profile": getProfile(),
     ...(headers as Record<string, string> | undefined),
   };
+  // Only set JSON content-type when a body is present — Fastify rejects
+  // Content-Type: application/json with an empty body.
+  if (rest.body !== undefined && rest.body !== null && !finalHeaders["Content-Type"]) {
+    finalHeaders["Content-Type"] = "application/json";
+  }
   const jwt = getJwt();
   if (auth && jwt) finalHeaders.Authorization = `Bearer ${jwt}`;
 
@@ -71,8 +75,16 @@ export async function apiRequest<T = any>(
 export const api = {
   get: <T = any>(path: string, opts?: { auth?: boolean }) => apiRequest<T>(path, { method: "GET", ...opts }),
   post: <T = any>(path: string, body?: unknown, opts?: { auth?: boolean }) =>
-    apiRequest<T>(path, { method: "POST", body: body !== undefined ? JSON.stringify(body) : undefined, ...opts }),
+    apiRequest<T>(path, {
+      method: "POST",
+      body: body !== undefined ? JSON.stringify(body) : JSON.stringify({}),
+      ...opts,
+    }),
   patch: <T = any>(path: string, body?: unknown, opts?: { auth?: boolean }) =>
-    apiRequest<T>(path, { method: "PATCH", body: body !== undefined ? JSON.stringify(body) : undefined, ...opts }),
+    apiRequest<T>(path, {
+      method: "PATCH",
+      body: body !== undefined ? JSON.stringify(body) : JSON.stringify({}),
+      ...opts,
+    }),
   del: <T = any>(path: string, opts?: { auth?: boolean }) => apiRequest<T>(path, { method: "DELETE", ...opts }),
 };

@@ -1,6 +1,7 @@
 /**
- * Portfolio USD projection from live SoSoValue + SoDEX account state.
- * Never invents prices — fails closed if snapshot unavailable.
+ * Portfolio USD projection from live SoSoValue + SoDEX account state/balances.
+ * Never invents prices — fails closed if snapshot unavailable for unknown assets.
+ * Empty balances → totalUsd: 0 (not null).
  */
 import { getSoSoValueClient } from "../clients/sosovalue.js";
 import { HatchError } from "../lib/errors.js";
@@ -26,50 +27,115 @@ function asNumber(v: unknown): number | null {
   return null;
 }
 
-/** Best-effort extract qty map from SoDEX account state JSON */
+/** Merge one balance row into out map */
+function ingestRow(out: Record<string, number>, row: unknown): void {
+  if (!row || typeof row !== "object") return;
+  const r = row as Record<string, unknown>;
+  const sym = String(
+    r.coin ??
+      r.symbol ??
+      r.asset ??
+      r.name ??
+      r.a ??
+      r.token ??
+      r.coinName ??
+      r.assetName ??
+      "",
+  ).trim();
+  if (!sym) return;
+
+  const available = asNumber(
+    r.available ?? r.balance ?? r.qty ?? r.quantity ?? r.free ?? r.avail,
+  );
+  const locked = asNumber(r.locked ?? r.freeze ?? r.frozen ?? r.lock);
+  const total = asNumber(r.total ?? r.t ?? r.walletBalance);
+  let qty: number | null = total;
+  if (qty === null && (available !== null || locked !== null)) {
+    qty = (available ?? 0) + (locked ?? 0);
+  }
+  if (qty === null) return;
+  out[sym] = (out[sym] ?? 0) + qty;
+}
+
+/** Best-effort extract qty map from SoDEX account state / balances JSON */
 export function extractBalances(state: unknown): Record<string, number> {
   const out: Record<string, number> = {};
   if (!state || typeof state !== "object") return out;
-  const root = state as Record<string, unknown>;
-  const data = (root.data ?? root) as Record<string, unknown>;
-  const bags = [
-    data.balances,
-    data.assets,
-    data.coins,
-    data.B,
-    data.spotBalances,
-    data.vaultBalances,
-    root.balances,
-  ];
-  for (const bag of bags) {
-    if (!Array.isArray(bag)) continue;
-    for (const row of bag) {
-      if (!row || typeof row !== "object") continue;
-      const r = row as Record<string, unknown>;
-      const sym = String(
-        r.coin ?? r.symbol ?? r.asset ?? r.name ?? r.a ?? r.token ?? "",
-      );
-      const qty = asNumber(
-        r.available ??
-          r.balance ??
-          r.qty ??
-          r.quantity ??
-          r.free ??
-          r.total ??
-          r.t,
-      );
-      if (sym && qty !== null) {
-        out[sym] = (out[sym] ?? 0) + qty;
+
+  const visit = (node: unknown, depth = 0) => {
+    if (depth > 8 || node == null) return;
+    if (Array.isArray(node)) {
+      for (const item of node) {
+        if (item && typeof item === "object") {
+          const o = item as Record<string, unknown>;
+          // Row-like object with a coin/symbol field
+          if (
+            o.coin != null ||
+            o.symbol != null ||
+            o.asset != null ||
+            o.token != null ||
+            o.coinName != null
+          ) {
+            ingestRow(out, item);
+          } else {
+            visit(item, depth + 1);
+          }
+        }
+      }
+      return;
+    }
+    if (typeof node !== "object") return;
+    const root = node as Record<string, unknown>;
+    const bags = [
+      root.balances,
+      root.assets,
+      root.coins,
+      root.B,
+      root.spotBalances,
+      root.vaultBalances,
+      root.data,
+      root.list,
+      root.result,
+      root.items,
+    ];
+    for (const bag of bags) {
+      if (bag !== undefined) visit(bag, depth + 1);
+    }
+    // Object-map form: { "vUSDC": "12.3", ... }
+    for (const key of ["balanceMap", "balance"]) {
+      const candidate = root[key];
+      if (
+        candidate &&
+        typeof candidate === "object" &&
+        !Array.isArray(candidate)
+      ) {
+        for (const [sym, v] of Object.entries(
+          candidate as Record<string, unknown>,
+        )) {
+          if (typeof v === "object" && v !== null) {
+            ingestRow(out, { ...(v as object), coin: sym });
+          } else {
+            const qty = asNumber(v);
+            if (sym && qty !== null) out[sym] = (out[sym] ?? 0) + qty;
+          }
+        }
       }
     }
-  }
-  // Object-map form: { "vUSDC": "12.3", ... }
-  for (const candidate of [data.balanceMap, root.balanceMap]) {
-    if (!candidate || typeof candidate !== "object" || Array.isArray(candidate))
-      continue;
-    for (const [sym, v] of Object.entries(candidate as Record<string, unknown>)) {
-      const qty = asNumber(v);
-      if (sym && qty !== null) out[sym] = (out[sym] ?? 0) + qty;
+  };
+
+  visit(state);
+  return out;
+}
+
+/** Merge multiple SoDEX payloads (state + balances) into one qty map */
+export function mergeBalanceSources(
+  ...sources: Array<unknown | null | undefined>
+): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const src of sources) {
+    const part = extractBalances(src);
+    for (const [sym, qty] of Object.entries(part)) {
+      out[sym] = (out[sym] ?? 0) + qty;
     }
   }
   return out;
@@ -117,14 +183,19 @@ export function resolvePriceUsd(
     symbol.replace(/\.ssi$/i, ""),
     symbol.replace(/^v/i, "").replace(/\.ssi$/i, ""),
   ];
-  // Common aliases
   if (/mag7/i.test(symbol)) {
-    candidates.push("MAG7.ssi", "vMAG7.ssi", "MAG7");
+    candidates.push("MAG7.ssi", "vMAG7.ssi", "MAG7", "ssiMAG7", "vMAG7ssi");
   }
   if (/ussi/i.test(symbol)) {
-    candidates.push("USSI", "vUSSI");
+    candidates.push("USSI", "vUSSI", "ssiUSSI");
   }
-  if (/usdc/i.test(symbol)) {
+  if (/defi/i.test(symbol)) {
+    candidates.push("DEFI.ssi", "ssiDeFi", "DEFI");
+  }
+  if (/meme/i.test(symbol)) {
+    candidates.push("MEME.ssi", "ssiMeme", "MEME");
+  }
+  if (/usdc|usdt/i.test(symbol)) {
     return prices[symbol] ?? prices.USDC ?? prices.vUSDC ?? 1;
   }
   for (const c of candidates) {
@@ -139,6 +210,7 @@ export function resolvePriceUsd(
 
 export async function projectPortfolioUsd(
   sodexAccountState: unknown,
+  sodexBalances?: unknown,
 ): Promise<PortfolioProjection> {
   const warnings: string[] = [];
   let snapshot: unknown;
@@ -152,7 +224,7 @@ export async function projectPortfolioUsd(
     );
   }
 
-  const balances = extractBalances(sodexAccountState);
+  const balances = mergeBalanceSources(sodexBalances, sodexAccountState);
   const prices = extractPrices(snapshot);
   // Stablecoin / vault quote peg — not invented market prices
   for (const peg of ["USDC", "vUSDC", "USDT", "vUSDT"]) {
@@ -175,11 +247,15 @@ export async function projectPortfolioUsd(
   }
 
   if (!Object.keys(balances).length) {
-    warnings.push("No balances found in SoDEX account state");
+    warnings.push("No balances found in SoDEX account state/balances");
   }
 
+  // Empty account is a real $0 portfolio — not "unavailable"
+  const totalUsd =
+    Object.keys(balances).length === 0 ? 0 : anyPriced ? total : null;
+
   return {
-    totalUsd: anyPriced ? total : null,
+    totalUsd,
     components,
     source: "sosovalue+sodex",
     pricedAt: new Date().toISOString(),

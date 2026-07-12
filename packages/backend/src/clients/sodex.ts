@@ -57,6 +57,17 @@ export class SodexClient {
     return this.getPublic(`/accounts/${addr}/state`, 10);
   }
 
+  /** Official: GET /accounts/{userAddress}/balances — primary portfolio source */
+  async accountBalances(userAddress: string): Promise<unknown> {
+    const addr = userAddress.toLowerCase();
+    return this.getPublic(`/accounts/${addr}/balances`, 10);
+  }
+
+  /** Official: GET /markets/tickers — spot mark prices */
+  async marketsTickers(): Promise<unknown> {
+    return this.getPublic("/markets/tickers", 5);
+  }
+
   async marketsSymbols(): Promise<unknown> {
     return this.getPublic("/markets/symbols", 60);
   }

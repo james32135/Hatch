@@ -104,6 +104,12 @@ export async function runPortfolioSync(): Promise<{ children: number }> {
   for (const child of children) {
     try {
       const state = await sodex.accountState(child.parent.walletAddress);
+      let balances: unknown = null;
+      try {
+        balances = await sodex.accountBalances(child.parent.walletAddress);
+      } catch {
+        balances = null;
+      }
       const prev = await prisma.portfolioSnapshot.findFirst({
         where: { childId: child.id },
         orderBy: { createdAt: "desc" },
@@ -111,7 +117,7 @@ export async function runPortfolioSync(): Promise<{ children: number }> {
 
       let priced: Awaited<ReturnType<typeof priceAccountState>> | null = null;
       try {
-        priced = await priceAccountState(state);
+        priced = await priceAccountState(state, balances);
       } catch (err) {
         logger.warn(
           { childId: child.id, err: String(err) },
@@ -123,7 +129,7 @@ export async function runPortfolioSync(): Promise<{ children: number }> {
         data: {
           childId: child.id,
           environment: envEnum,
-          rawBalancesJson: state as object,
+          rawBalancesJson: { state, balances } as object,
           source: priced ? "sodex-job+priced" : "sodex-job",
           totalUsd: priced?.totalUsd ?? undefined,
           mag7Qty: priced?.mag7Qty ?? undefined,

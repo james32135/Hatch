@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { fmtUsd } from "@/lib/format";
+import { resolvePortfolioUsd, allocationSlices, holdingsAllocation } from "@/lib/portfolio";
 import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
 import { Unavailable } from "@/components/common/Unavailable";
 
@@ -11,9 +12,15 @@ export default function ChildKidPortfolio() {
   const childId = me.data?.childId || me.data?.scopes?.childId;
   const p = useQuery({ queryKey: ["portfolio", childId], queryFn: () => api.get<any>(`/api/portfolio/${childId}`), enabled: !!childId });
 
-  const alloc = Object.entries(p.data?.allocation || {}).map(([k, v]: any) => ({ name: k, value: Number(v) }));
   const holdings = p.data?.holdings || [];
-  const total = p.data?.latestSnapshot?.totalUsd ?? p.data?.totalUsd;
+  const allocRaw = allocationSlices(p.data?.allocation).length
+    ? allocationSlices(p.data?.allocation)
+    : holdingsAllocation(holdings);
+  const alloc = allocRaw.map((a) => ({
+    ...a,
+    value: a.value > 0 && a.value <= 1 ? a.value * 100 : a.value,
+  }));
+  const total = resolvePortfolioUsd(p.data);
 
   if (total == null && !p.isLoading) {
     return <Unavailable title="Nothing to show yet" detail="Your portfolio will appear after your parent's first investment." />;
@@ -38,7 +45,7 @@ export default function ChildKidPortfolio() {
             {alloc.map((a, i) => (
               <div key={a.name} className="flex items-center justify-between">
                 <span className="flex items-center gap-2"><span className="h-2 w-2 rounded" style={{ background: COLORS[i % COLORS.length] }} />{a.name}</span>
-                <span className="font-mono text-white/70">{(a.value * 100).toFixed(1)}%</span>
+                <span className="font-mono text-white/70">{a.value.toFixed(1)}%</span>
               </div>
             ))}
           </div>

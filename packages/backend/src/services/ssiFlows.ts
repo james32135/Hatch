@@ -1,9 +1,14 @@
 /**
- * SSI flow orchestration — Path A (SoDEX-native) preferred.
- * Path B (Base mint via Router) blocked until SSI_ROUTER_ADDRESS verified.
- * Never invents router/staking addresses. Stake/redeem follow official SSI docs.
+ * SSI flow orchestration — Path A (SoDEX-native) preferred for parents.
+ * Path B (Base mint via issuer/swap) is WLP/KYB-only per Whitepaper §5.3 —
+ * blocked for HATCH retail parents. Never invents mint calldata.
  */
-import { HATCH_CONTRACTS, SODEX_SYMBOLS, TOKENS } from "../config/addresses.js";
+import {
+  HATCH_CONTRACTS,
+  SODEX_SYMBOLS,
+  SSI_PROTOCOL,
+  TOKENS,
+} from "../config/addresses.js";
 
 export type SsiPath = "A_SODEX_VAULT" | "B_BASE_MINT" | "SSI_EARN_REDIRECT";
 
@@ -14,6 +19,7 @@ export interface SsiFlowPlan {
   steps: string[];
   symbols?: unknown;
   tokens?: unknown;
+  protocol?: unknown;
   earnUrl?: string;
   sodexAppUrl?: string;
 }
@@ -22,7 +28,6 @@ export function planMint(input: {
   index: "MAG7" | "USSI";
   amountUsd?: number;
 }): SsiFlowPlan {
-  // Path A always available — parent buys vault token on SoDEX
   const symbol =
     input.index === "MAG7"
       ? SODEX_SYMBOLS.vMAG7ssi_vUSDC
@@ -35,7 +40,7 @@ export function planMint(input: {
       "Fund Spot with vUSDC",
       `POST /api/allowances/sign-draft (or manual) for ${symbol.name}`,
       "Parent EIP-712 signs → POST /api/sodex/relay batchNewOrder BUY",
-      "Portfolio snapshot refreshes from SoDEX account state",
+      "Portfolio snapshot refreshes from SoDEX balances + account state",
     ],
     symbols: symbol,
     sodexAppUrl: "https://sodex.com",
@@ -53,79 +58,83 @@ export function planRedeem(input: { index: "MAG7" | "USSI" }): SsiFlowPlan {
     steps: [
       `Parent signs SELL on ${symbol.name} via cancel/new order drafts`,
       "POST /api/sodex/relay with parent signature",
-      "Balances refresh via SoDEX account state + /api/portfolio/:childId",
+      "Balances refresh via SoDEX balances + /api/portfolio/:childId",
     ],
     symbols: symbol,
   };
 }
 
 export function planStake(): SsiFlowPlan {
-  // Official: deposit MAG7.ssi auto-stakes; sMAG7.ssi is receipt (Base)
-  if (!HATCH_CONTRACTS.ssiStaking && !HATCH_CONTRACTS.ssiRouter) {
-    return {
-      path: "SSI_EARN_REDIRECT",
-      available: true,
-      reason:
-        "SSI staking contract address not verified in HATCH env — use official SSI Earn / Base token flows",
-      steps: [
-        "Hold MAG7.ssi on Base (see TOKENS.mag7Ssi)",
-        "Deposit via official SSI Earn UI (ssi.sosovalue.com) — auto-stakes per docs",
-        "Receive sMAG7.ssi receipt token",
-        "HATCH reads balances via GET /api/ssi/balances/:address",
-        "Do not invent staking contract calls until SSI_STAKING_ADDRESS verified",
-      ],
-      tokens: {
-        mag7Ssi: TOKENS.mag7Ssi,
-        sMag7Ssi: TOKENS.sMag7Ssi,
-      },
-      earnUrl: "https://ssi.sosovalue.com",
-    };
-  }
   return {
-    path: "B_BASE_MINT",
-    available: false,
-    reason: "Staking ABI wiring pending verified address audit",
-    steps: ["Set SSI_STAKING_ADDRESS after forge/BaseScan verification"],
+    path: "SSI_EARN_REDIRECT",
+    available: true,
+    reason:
+      "Official stakeFactory/assetLocking are documented (Whitepaper §5.3). Parent-facing stake ABI not audited into HATCH — use SSI Earn UI.",
+    steps: [
+      "Hold MAG7.ssi on Base (see TOKENS.mag7Ssi)",
+      "Deposit via official SSI Earn UI — auto-stakes per docs",
+      "Receive sMAG7.ssi receipt token",
+      "HATCH reads balances via GET /api/ssi/balances/:address",
+      `Known contracts: stakeFactory=${SSI_PROTOCOL.stakeFactory}, assetLocking=${SSI_PROTOCOL.assetLocking}`,
+    ],
+    tokens: {
+      mag7Ssi: TOKENS.mag7Ssi,
+      sMag7Ssi: TOKENS.sMag7Ssi,
+    },
+    protocol: {
+      stakeFactory: SSI_PROTOCOL.stakeFactory,
+      assetLocking: SSI_PROTOCOL.assetLocking,
+    },
+    earnUrl: SSI_PROTOCOL.earnUrl,
   };
 }
 
 export function planPathBMint(): SsiFlowPlan {
-  if (!HATCH_CONTRACTS.ssiRouter) {
-    return {
-      path: "B_BASE_MINT",
-      available: false,
-      reason:
-        "SSI_ROUTER_ADDRESS blank — Path B blocked until router verified (architecture lock)",
-      steps: [
-        "Discover router via ssi.sosovalue.com txs / SoSoValueLabs/ssi-protocol",
-        "Set SSI_ROUTER_ADDRESS in env",
-        "Then implement mint calldata — never invent",
-      ],
-      tokens: TOKENS,
-    };
-  }
   return {
     path: "B_BASE_MINT",
     available: false,
-    reason: "Router set but mint ABI not yet audited into HATCH",
-    steps: ["Audit router ABI against official SSI protocol before enabling"],
+    reason:
+      "On-chain mint/burn is WLP (KYB) only per Whitepaper §5.3. HATCH parents buy SSI exposure via Path A (SoDEX vault). No retail mint calldata.",
+    steps: [
+      "WLP mints via issuer/swap after Protocol Server quote (not a HATCH parent flow)",
+      `Official contracts: swap=${SSI_PROTOCOL.swap}, issuer=${SSI_PROTOCOL.issuer}, factory=${SSI_PROTOCOL.factory}`,
+      "Parents: use Path A — EIP-712 SoDEX BUY on vMAG7ssi_vUSDC / vUSSI_vUSDC",
+    ],
+    tokens: TOKENS,
+    protocol: SSI_PROTOCOL,
   };
 }
 
 export function ssiCapabilityMatrix() {
   return {
-    pathA_sodexVault: { mint: true, redeem: true, note: "Parent-signed SoDEX orders" },
+    pathA_sodexVault: {
+      mint: true,
+      redeem: true,
+      note: "Parent-signed SoDEX vault orders (retail Path A)",
+    },
     pathB_baseMint: {
-      available: !!HATCH_CONTRACTS.ssiRouter,
-      blockedReason: HATCH_CONTRACTS.ssiRouter
-        ? null
-        : "SSI_ROUTER_ADDRESS not verified",
+      available: false,
+      blockedReason:
+        "Whitepaper §5.3: on-chain mint/burn is WLP (KYB) only — not for HATCH parents",
+      protocol: SSI_PROTOCOL,
     },
     stake: {
-      mode: HATCH_CONTRACTS.ssiStaking ? "onchain" : "ssi_earn_redirect",
+      mode: "ssi_earn_redirect",
       sMag7: TOKENS.sMag7Ssi,
+      stakeFactory: SSI_PROTOCOL.stakeFactory,
+      assetLocking: SSI_PROTOCOL.assetLocking,
+      earnUrl: SSI_PROTOCOL.earnUrl,
     },
-    balanceRefresh: ["GET /api/ssi/balances/:address", "GET /api/portfolio/:childId"],
+    tokens: TOKENS,
+    protocol: SSI_PROTOCOL,
+    balanceRefresh: [
+      "GET /api/ssi/balances/:address",
+      "GET /api/portfolio/:childId",
+    ],
     custody: false,
+    hatchContractsNote: {
+      ssiRouterEnv: HATCH_CONTRACTS.ssiRouter || null,
+      ssiStakingEnv: HATCH_CONTRACTS.ssiStaking || null,
+    },
   };
 }

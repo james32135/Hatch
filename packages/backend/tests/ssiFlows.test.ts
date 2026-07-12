@@ -13,16 +13,18 @@ describe("SSI flows (architecture-locked)", () => {
     expect(plan.path).toBe("A_SODEX_VAULT");
   });
 
-  it("Path B blocked without router", () => {
+  it("Path B blocked — WLP-only per whitepaper", () => {
     const b = planPathBMint();
     expect(b.available).toBe(false);
-    expect(b.reason).toMatch(/SSI_ROUTER_ADDRESS|blocked/i);
+    expect(b.reason).toMatch(/WLP|blocked|Path A/i);
   });
 
-  it("stake redirects to SSI Earn when staking addr blank", () => {
+  it("stake redirects to SSI Earn with official stakeFactory", () => {
     const s = planStake();
     expect(s.path).toBe("SSI_EARN_REDIRECT");
     expect(s.earnUrl).toMatch(/ssi\.sosovalue/);
+    expect(ssiCapabilityMatrix().pathB_baseMint.available).toBe(false);
+    expect(ssiCapabilityMatrix().protocol.swap).toMatch(/^0x/i);
   });
 
   it("capability matrix custody false", () => {

@@ -22,7 +22,7 @@ export default function ChildAllowance() {
   const policy = (allowances.data?.policies || []).find((p: any) => p.childId === childId);
 
   const trigger = useMutation({
-    mutationFn: () => api.post<any>(`/api/allowances/${policy?.id}/trigger`),
+    mutationFn: () => api.post<any>(`/api/allowances/${policy?.id}/trigger`, {}),
     onSuccess: () => { toast.success("Handoff created"); qc.invalidateQueries({ queryKey: ["allowances"] }); },
     onError: (e: any) => toast.error(e?.message || "Trigger failed"),
   });

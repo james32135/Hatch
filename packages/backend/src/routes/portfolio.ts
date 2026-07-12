@@ -42,11 +42,18 @@ export async function registerPortfolioRoutes(app: FastifyInstance): Promise<voi
 
       const sodex = createSodexClient(profile);
       let accountState: unknown = null;
+      let accountBalances: unknown = null;
       let sodexError: string | undefined;
       try {
         accountState = await sodex.accountState(parent.walletAddress);
       } catch (err) {
         sodexError = err instanceof Error ? err.message : String(err);
+      }
+      try {
+        accountBalances = await sodex.accountBalances(parent.walletAddress);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        sodexError = [sodexError, `balances: ${msg}`].filter(Boolean).join("; ");
       }
 
       const latest = await getPrisma().portfolioSnapshot.findFirst({
@@ -61,6 +68,7 @@ export async function registerPortfolioRoutes(app: FastifyInstance): Promise<voi
           parentId: parent.id,
           parentWallet: parent.walletAddress,
           accountState,
+          accountBalances,
         });
       } catch (err) {
         sodexError = [
@@ -70,6 +78,11 @@ export async function registerPortfolioRoutes(app: FastifyInstance): Promise<voi
           .filter(Boolean)
           .join("; ");
       }
+
+      const totalUsd =
+        engine?.performance?.currentUsd ??
+        engine?.projection?.totalUsd ??
+        (latest?.totalUsd != null ? Number(latest.totalUsd.toString()) : null);
 
       return {
         child: {
@@ -81,7 +94,10 @@ export async function registerPortfolioRoutes(app: FastifyInstance): Promise<voi
         profile: profile.id,
         parentWallet: parent.walletAddress,
         sodexAccountState: accountState,
+        sodexBalances: accountBalances,
+        totalUsd,
         projection: engine?.projection ?? null,
+        warnings: engine?.projection?.warnings ?? [],
         holdings: engine?.holdings ?? [],
         allocation: engine?.allocation ?? null,
         performance: engine?.performance ?? null,
@@ -152,6 +168,12 @@ export async function registerPortfolioRoutes(app: FastifyInstance): Promise<voi
       );
       const sodex = createSodexClient(profile);
       const state = await sodex.accountState(req.user.wallet);
+      let balances: unknown = null;
+      try {
+        balances = await sodex.accountBalances(req.user.wallet);
+      } catch {
+        balances = null;
+      }
       const envEnum =
         profile.id === "testnet"
           ? "TESTNET"
@@ -161,7 +183,7 @@ export async function registerPortfolioRoutes(app: FastifyInstance): Promise<voi
 
       let priced: Awaited<ReturnType<typeof priceAccountState>> | null = null;
       try {
-        priced = await priceAccountState(state);
+        priced = await priceAccountState(state, balances);
       } catch {
         priced = null;
       }
@@ -170,7 +192,7 @@ export async function registerPortfolioRoutes(app: FastifyInstance): Promise<voi
         data: {
           childId,
           environment: envEnum,
-          rawBalancesJson: state as object,
+          rawBalancesJson: { state, balances } as object,
           source: priced ? "sodex+priced" : "sodex",
           totalUsd: priced?.totalUsd ?? undefined,
           mag7Qty: priced?.mag7Qty ?? undefined,
@@ -180,7 +202,9 @@ export async function registerPortfolioRoutes(app: FastifyInstance): Promise<voi
       });
       return {
         snapshot,
-        projection: priced?.projection ?? (await projectPortfolioUsd(state).catch(() => null)),
+        projection:
+          priced?.projection ??
+          (await projectPortfolioUsd(state, balances).catch(() => null)),
       };
     },
   );

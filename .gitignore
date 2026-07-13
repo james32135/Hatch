@@ -47,22 +47,11 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 
-# Docs — README.md only (all other markdown private/local)
+# Docs — only root README.md is published; all other markdown stays local
 *.md
-!README.md
-!**/README.md
-!PROTOCOL_TRACE*.md
-!ROOT_CAUSE_ANALYSIS.md
-!SYSTEM_AUDIT.md
-!EXECUTION_TRACE.md
-!FINAL_SYSTEM_AUDIT.md
-!EXECUTION_ARCHITECTURE.md
-!MARKET_DISCOVERY.md
-!SYSTEM_CONNECTION_AUDIT.md
-!EXECUTION_FIXES.md
-!MARKET_VERIFICATION_REPORT.md
+!/README.md
 
-# Agent / local tracking (also covered by *.md)
+# Agent / local tracking
 MEMORY.md
 PROGRESS.md
 NEXT_TASK.md

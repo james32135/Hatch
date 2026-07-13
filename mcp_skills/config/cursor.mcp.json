@@ -1,0 +1,35 @@
+{
+  "mcpServers": {
+    "hatch-portfolio": {
+      "command": "node",
+      "args": ["mcp_skills/mcp/hatch-portfolio/server.mjs"],
+      "env": {
+        "HATCH_API_BASE": "https://hatch-api-h018.onrender.com",
+        "HATCH_PROFILE": "mainnet"
+      }
+    },
+    "hatch-sodex": {
+      "command": "node",
+      "args": ["mcp_skills/mcp/hatch-sodex/server.mjs"],
+      "env": {
+        "HATCH_API_BASE": "https://hatch-api-h018.onrender.com",
+        "HATCH_PROFILE": "mainnet"
+      }
+    },
+    "hatch-ssi": {
+      "command": "node",
+      "args": ["mcp_skills/mcp/hatch-ssi/server.mjs"],
+      "env": {
+        "HATCH_API_BASE": "https://hatch-api-h018.onrender.com"
+      }
+    },
+    "hatch-copilot": {
+      "command": "node",
+      "args": ["mcp_skills/mcp/hatch-copilot/server.mjs"],
+      "env": {
+        "HATCH_API_BASE": "https://hatch-api-h018.onrender.com",
+        "HATCH_JWT": "${env:HATCH_JWT}"
+      }
+    }
+  }
+}

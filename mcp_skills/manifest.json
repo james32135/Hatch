@@ -1,0 +1,43 @@
+{
+  "name": "hatch-mcp-skills",
+  "version": "1.0.0",
+  "description": "HATCH MCP servers and Cursor agent skills extension pack.",
+  "mcpServers": [
+    {
+      "id": "hatch-portfolio",
+      "path": "mcp/hatch-portfolio/server.mjs",
+      "tools": ["portfolio_get", "portfolio_history", "portfolio_transactions", "children_list", "health_check"]
+    },
+    {
+      "id": "hatch-sodex",
+      "path": "mcp/hatch-sodex/server.mjs",
+      "tools": ["markets_executable", "markets_symbols", "sodex_meta", "sodex_readiness", "order_verification", "config_surface"]
+    },
+    {
+      "id": "hatch-ssi",
+      "path": "mcp/hatch-ssi/server.mjs",
+      "tools": ["ssi_indices", "ssi_market_snapshot", "ssi_mag7_constituents", "ssi_capabilities", "ssi_flow_mint", "ssi_flow_redeem", "ssi_flow_full", "ssi_balances"]
+    },
+    {
+      "id": "hatch-copilot",
+      "path": "mcp/hatch-copilot/server.mjs",
+      "tools": ["copilot_health", "copilot_ask", "projections_assumptions", "metrics_snapshot"]
+    }
+  ],
+  "skills": [
+    "skills/hatch-family-portfolio",
+    "skills/hatch-allowance-relay",
+    "skills/hatch-ssi-intelligence",
+    "skills/hatch-child-education",
+    "skills/hatch-investment-copilot"
+  ],
+  "setup": {
+    "install": "cd mcp_skills && npm install",
+    "cursorConfig": "mcp_skills/config/cursor.mcp.json",
+    "env": {
+      "HATCH_API_BASE": "https://hatch-api-h018.onrender.com",
+      "HATCH_PROFILE": "mainnet",
+      "HATCH_JWT": "Parent SIWE JWT for authenticated tools"
+    }
+  }
+}

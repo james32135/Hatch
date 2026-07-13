@@ -595,6 +595,10 @@ HATCH/
 │   ├── backend/              # Fastify API + Prisma + jobs
 │   ├── contracts/            # Foundry HATCHLog / HATCHSchedule
 │   └── web/                  # Workspace stub
+├── mcp_skills/               # MCP servers + Cursor agent skills
+│   ├── mcp/                  # hatch-portfolio, hatch-sodex, hatch-ssi, hatch-copilot
+│   ├── skills/               # Domain skills (portfolio, relay, SSI, education, copilot)
+│   └── config/cursor.mcp.json
 ├── render.yaml               # API deploy
 ├── .env.example              # Full env contract
 ├── MARKET_PROBE_TESTNET.json # Market capability probe artifact
@@ -613,6 +617,25 @@ packages/backend/src/
 ├── config/          # env, environment, addresses
 └── lib/             # prisma, redis, childAccess, errors
 ```
+
+### MCP servers & agent skills
+
+The `mcp_skills/` extension pack exposes HATCH to Cursor via four stdio MCP servers and five domain skills:
+
+| Server | Tools |
+|--------|-------|
+| `hatch-portfolio` | Portfolio, history, transactions, children |
+| `hatch-sodex` | Executable markets, readiness, order verification |
+| `hatch-ssi` | SoSoValue indices, flows, balances |
+| `hatch-copilot` | AI health, grounded agent queries, metrics |
+
+```bash
+cd mcp_skills && npm install
+# Point Cursor MCP config at mcp_skills/config/cursor.mcp.json
+# Set HATCH_JWT for authenticated portfolio and copilot tools
+```
+
+Skills live under `mcp_skills/skills/*/SKILL.md` — portfolio ownership, allowance relay, SSI research, child education, and Investment Copilot operations.
 
 ---
 

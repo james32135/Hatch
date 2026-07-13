@@ -50,6 +50,7 @@ Thumbs.db
 # Docs — only root README.md is published; all other markdown stays local
 *.md
 !/README.md
+!/mcp_skills/skills/**/SKILL.md
 
 # Agent / local tracking
 MEMORY.md

@@ -1,0 +1,19 @@
+{
+  "name": "@hatch/mcp-skills",
+  "private": true,
+  "version": "1.0.0",
+  "description": "HATCH MCP servers and Cursor agent skills for family portfolio, SoDEX execution, SSI intelligence, and Investment Copilot workflows.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1"
+  },
+  "scripts": {
+    "mcp:portfolio": "node mcp/hatch-portfolio/server.mjs",
+    "mcp:sodex": "node mcp/hatch-sodex/server.mjs",
+    "mcp:ssi": "node mcp/hatch-ssi/server.mjs",
+    "mcp:copilot": "node mcp/hatch-copilot/server.mjs"
+  }
+}

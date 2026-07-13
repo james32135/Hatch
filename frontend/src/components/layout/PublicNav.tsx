@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 
 export default function PublicNav() {
   return (
-    <header className="sticky top-0 z-40 border-b border-white/5 bg-black/60 backdrop-blur">
+    <header className="sticky top-0 z-40 border-b border-white/5 bg-[#120F17]/55 backdrop-blur-xl">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3">
         <Link to="/" className="text-white">
           <HatchLogo />

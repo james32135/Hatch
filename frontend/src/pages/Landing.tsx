@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import PublicNav from "@/components/layout/PublicNav";
 import Footer from "@/components/layout/Footer";
+import { HeroSilkBackdrop } from "@/components/backgrounds/HeroSilkBackdrop";
 import { Button } from "@/components/ui/button";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
@@ -29,25 +30,14 @@ export default function Landing() {
         </div>
       )}
 
-      {/* Hero */}
-      <section ref={heroRef} className="relative overflow-hidden">
-        <div className="hatch-grid absolute inset-0 opacity-40 [mask-image:radial-gradient(ellipse_at_top,black,transparent_70%)]" />
-        {/* Ambient orbs */}
-        <motion.div
-          aria-hidden
-          className="pointer-events-none absolute -top-40 left-1/2 h-[600px] w-[600px] -translate-x-1/2 rounded-full blur-3xl"
-          style={{ background: "radial-gradient(closest-side, hsl(199 89% 60% / 0.18), transparent)" }}
-          animate={{ scale: [1, 1.15, 1], opacity: [0.7, 1, 0.7] }}
-          transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
-        />
-        <motion.div
-          aria-hidden
-          className="pointer-events-none absolute top-40 right-0 h-[400px] w-[400px] rounded-full blur-3xl"
-          style={{ background: "radial-gradient(closest-side, hsl(142 71% 45% / 0.12), transparent)" }}
-          animate={{ scale: [1.1, 1, 1.1], opacity: [0.6, 0.9, 0.6] }}
-          transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
-        />
-        <motion.div style={{ y: heroY, opacity: heroOpacity }} className="relative mx-auto max-w-6xl px-6 pt-24 pb-32 md:pt-32">
+      {/* Hero — Silk (React Bits Background Studio) */}
+      <section
+        ref={heroRef}
+        className="relative overflow-hidden"
+        style={{ backgroundColor: "#120F17" }}
+      >
+        <HeroSilkBackdrop />
+        <motion.div style={{ y: heroY, opacity: heroOpacity }} className="relative z-10 mx-auto max-w-6xl px-6 pt-24 pb-32 md:pt-32">
           <motion.p
             initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}
             className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-xs text-white/60"
@@ -241,7 +231,7 @@ function HeroVisual() {
   return (
     <motion.div
       initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, delay: 0.35 }}
-      className="mt-20 rounded-3xl border border-white/10 bg-gradient-to-b from-white/[0.03] to-transparent p-8"
+      className="mt-20 rounded-3xl border border-white/10 bg-black/35 p-8 shadow-[0_24px_80px_-40px_rgba(0,0,0,0.9)] backdrop-blur-md"
     >
       <svg viewBox="0 0 800 260" className="h-64 w-full" fill="none">
         <defs>

@@ -1,6 +1,11 @@
 import { getEnv } from "../config/env.js";
 import { HatchError } from "../lib/errors.js";
 import { redisGet, redisSet } from "../lib/redis.js";
+import { logger } from "../lib/logger.js";
+
+/** Shared Redis key — blocks SoSoValue outbound calls across workers. */
+export const SOSO_COOLDOWN_KEY = "hatch:soso:cooldown";
+const DEFAULT_COOLDOWN_SEC = 300;
 
 export class SoSoValueClient {
   private readonly baseUrl: string;
@@ -8,6 +13,7 @@ export class SoSoValueClient {
   private readonly ratePerMin: number;
   private windowStart = Date.now();
   private windowCount = 0;
+  private localCooldownUntil = 0;
 
   constructor() {
     const env = getEnv();
@@ -17,6 +23,14 @@ export class SoSoValueClient {
   }
 
   private async throttle(): Promise<void> {
+    if (Date.now() < this.localCooldownUntil) {
+      throw new HatchError("rate_limited", "SoSoValue rate limited", 429);
+    }
+    const cool = await redisGet(SOSO_COOLDOWN_KEY);
+    if (cool) {
+      throw new HatchError("rate_limited", "SoSoValue rate limited", 429);
+    }
+
     const now = Date.now();
     if (now - this.windowStart >= 60_000) {
       this.windowStart = now;
@@ -29,6 +43,16 @@ export class SoSoValueClient {
       this.windowCount = 0;
     }
     this.windowCount += 1;
+  }
+
+  private async markCooldown(retryAfterSec?: number): Promise<void> {
+    const sec = Math.max(
+      60,
+      Math.min(retryAfterSec && Number.isFinite(retryAfterSec) ? retryAfterSec : DEFAULT_COOLDOWN_SEC, 900),
+    );
+    this.localCooldownUntil = Date.now() + sec * 1000;
+    await redisSet(SOSO_COOLDOWN_KEY, new Date().toISOString(), sec);
+    logger.warn({ cooldownSec: sec }, "SoSoValue cooldown armed");
   }
 
   async get<T = unknown>(path: string, cacheTtlSeconds = 0): Promise<T> {
@@ -46,7 +70,12 @@ export class SoSoValueClient {
       },
     });
     if (res.status === 429) {
-      throw new HatchError("rate_limited", "SoSoValue rate limited", 429);
+      const retryRaw = res.headers.get("retry-after");
+      const retryAfterSec = retryRaw ? Number(retryRaw) : undefined;
+      await this.markCooldown(retryAfterSec);
+      throw new HatchError("rate_limited", "SoSoValue rate limited", 429, {
+        retryAfterSec,
+      });
     }
     if (!res.ok) {
       const body = await res.text();

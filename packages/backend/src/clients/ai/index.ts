@@ -261,6 +261,34 @@ function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+/**
+ * Parse provider 429 / quota messages into a circuit-open duration.
+ * Returns null when the error is not a rate-limit style failure.
+ */
+export function parseAiRateLimitCooldownMs(message: string): number | null {
+  if (!/429|rate limit|too many requests|tokens per day|\bTPD\b|quota/i.test(message)) {
+    return null;
+  }
+
+  let ms = 60_000;
+  const minSec = message.match(/try again in\s+(\d+)\s*m\s*([\d.]+)\s*s/i);
+  if (minSec) {
+    ms = (Number(minSec[1]) * 60 + Number(minSec[2])) * 1000;
+  } else {
+    const secOnly = message.match(/try again in\s+([\d.]+)\s*s/i);
+    if (secOnly) ms = Number(secOnly[1]) * 1000;
+  }
+
+  // Daily token caps need a long cool-off so we stop burning the next providers' retries.
+  if (/tokens per day|\bTPD\b|per day/i.test(message)) {
+    ms = Math.max(ms, 15 * 60_000);
+  } else {
+    ms = Math.max(ms, 60_000);
+  }
+
+  return Math.min(Math.max(ms, 5_000), 60 * 60_000);
+}
+
 function toAnthropicMessages(messages: ChatCompletionMessageParam[]) {
   const systemParts = messages
     .filter((m) => m.role === "system")
@@ -364,7 +392,19 @@ export class AiClient {
           const message = err instanceof Error ? err.message : String(err);
           logger.warn({ provider: provider.id, attempt, message }, "ai provider call failed");
           errors.push({ provider: provider.id, error: message });
-          const retryable = /timeout|429|5\d\d|ECONN|fetch|network|rate|overloaded/i.test(message);
+
+          const rateCooldown = parseAiRateLimitCooldownMs(message);
+          if (rateCooldown != null) {
+            // Daily/token caps: open circuit and fail over immediately (no same-provider retry).
+            breaker.trip(rateCooldown);
+            logger.warn(
+              { provider: provider.id, cooldownMs: rateCooldown },
+              "ai provider rate-limited — circuit tripped, failing over",
+            );
+            break;
+          }
+
+          const retryable = /timeout|5\d\d|ECONN|fetch|network|overloaded/i.test(message);
           if (!retryable || attempt === maxAttempts) {
             breaker.recordFailure();
             break;
@@ -422,8 +462,18 @@ export class AiClient {
         breaker.recordSuccess();
         return { ...result, latencyMs: Date.now() - started };
       } catch (err) {
-        breaker.recordFailure();
-        errors.push(`${provider.id}: ${err instanceof Error ? err.message : String(err)}`);
+        const message = err instanceof Error ? err.message : String(err);
+        const rateCooldown = parseAiRateLimitCooldownMs(message);
+        if (rateCooldown != null) {
+          breaker.trip(rateCooldown);
+          logger.warn(
+            { provider: provider.id, cooldownMs: rateCooldown },
+            "ai stream provider rate-limited — circuit tripped, failing over",
+          );
+        } else {
+          breaker.recordFailure();
+        }
+        errors.push(`${provider.id}: ${message}`);
         logger.warn({ provider: provider.id, err: errors.at(-1) }, "ai stream provider failed, failing over");
       }
     }

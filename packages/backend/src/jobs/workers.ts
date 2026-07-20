@@ -5,10 +5,16 @@
 import { getEnv } from "../config/env.js";
 import { resolveProfile } from "../config/environment.js";
 import { createSodexClient } from "../clients/sodex.js";
-import { getSoSoValueClient } from "../clients/sosovalue.js";
+import { getSoSoValueClient, SOSO_COOLDOWN_KEY } from "../clients/sosovalue.js";
 import { getPrisma } from "../lib/prisma.js";
 import { logger } from "../lib/logger.js";
-import { redisSet, redisGet, redisAcquireLock, redisReleaseLock } from "../lib/redis.js";
+import {
+  redisSet,
+  redisGet,
+  redisAcquireLock,
+  redisReleaseLock,
+  redisLPush,
+} from "../lib/redis.js";
 import { generateLessonForChild } from "../agents/education.js";
 import { runAllowanceDueHandoffs } from "../services/allowanceHandoff.js";
 import {
@@ -18,26 +24,36 @@ import {
 import {
   dequeueJob,
   enqueueJob,
+  isRateLimitError,
   markJobCompleted,
   requeueOrDeadLetter,
   type JobName,
   type JobPayload,
 } from "./queue.js";
+import { isHatchError } from "../lib/errors.js";
 import { randomUUID } from "node:crypto";
 
 const LOCK_TTL = 55;
+const QUEUE_KEY = "hatch:jobs:queue";
 
 export async function processOneJob(): Promise<boolean> {
   const job = await dequeueJob();
   if (!job) return false;
 
+  if (job.availableAt) {
+    const readyAt = Date.parse(job.availableAt);
+    if (Number.isFinite(readyAt) && readyAt > Date.now()) {
+      // Not ready — put back at head (dequeued last) and stop this drain pass.
+      await redisLPush(QUEUE_KEY, JSON.stringify(job));
+      return false;
+    }
+  }
+
   const lockKey = `hatch:joblock:${job.name}:${job.id}`;
   const token = randomUUID();
   const got = await redisAcquireLock(lockKey, token, LOCK_TTL);
   if (!got) {
-    // Another worker holds it — put same payload back
-    const { redisLPush } = await import("../lib/redis.js");
-    await redisLPush("hatch:jobs:queue", JSON.stringify(job));
+    await redisLPush(QUEUE_KEY, JSON.stringify(job));
     return true;
   }
 
@@ -217,20 +233,51 @@ export async function runPortfolioSync(opts?: {
 }
 
 export async function runMarketSync(): Promise<void> {
-  const soso = getSoSoValueClient();
-  const [indices, mag7Constituents] = await Promise.all([
-    soso.indices(),
-    soso.mag7Constituents().catch(() => null),
-  ]);
-  const at = new Date().toISOString();
-  await redisSet("hatch:market:indices", JSON.stringify({ at, indices }), 120);
-  if (mag7Constituents) {
-    await redisSet(
-      "hatch:market:mag7_constituents",
-      JSON.stringify({ at, mag7Constituents }),
-      120,
-    );
+  const cool = await redisGet(SOSO_COOLDOWN_KEY);
+  if (cool) {
+    await extendMarketCacheTtl();
+    logger.warn("market_sync skipped — SoSoValue cooldown active");
+    return;
   }
+
+  const soso = getSoSoValueClient();
+  try {
+    // Sequential to avoid double-bursting SoSoValue on a cold cache.
+    const indices = await soso.indices();
+    const mag7Constituents = await soso.mag7Constituents().catch(() => null);
+    const at = new Date().toISOString();
+    await redisSet("hatch:market:indices", JSON.stringify({ at, indices }), 300);
+    if (mag7Constituents) {
+      await redisSet(
+        "hatch:market:mag7_constituents",
+        JSON.stringify({ at, mag7Constituents }),
+        300,
+      );
+    }
+  } catch (err) {
+    if (isRateLimitError(err) || (isHatchError(err) && err.statusCode === 429)) {
+      const hadCache = await extendMarketCacheTtl();
+      if (hadCache) {
+        logger.warn(
+          { err: String(err) },
+          "market_sync rate limited — extended existing cache, soft-ok",
+        );
+        return;
+      }
+    }
+    throw err;
+  }
+}
+
+async function extendMarketCacheTtl(): Promise<boolean> {
+  let had = false;
+  for (const key of ["hatch:market:indices", "hatch:market:mag7_constituents"] as const) {
+    const cur = await redisGet(key);
+    if (!cur) continue;
+    await redisSet(key, cur, 600);
+    had = true;
+  }
+  return had;
 }
 
 export async function runCleanup(): Promise<{
@@ -268,6 +315,10 @@ export async function scheduleNamedJobs(): Promise<void> {
     "allowance_scheduler",
   ];
   for (const name of names) {
+    if (name === "market_sync") {
+      const cool = await redisGet(SOSO_COOLDOWN_KEY);
+      if (cool) continue;
+    }
     const gate = `hatch:schedgate:${name}`;
     const recent = await redisGet(gate);
     if (recent) continue;
@@ -276,7 +327,7 @@ export async function scheduleNamedJobs(): Promise<void> {
       name === "portfolio_sync"
         ? 55
         : name === "market_sync"
-          ? 25
+          ? 120 // was 25s — too aggressive for SoSoValue quotas
           : 14 * 60;
     await redisSet(gate, new Date().toISOString(), ttl);
   }

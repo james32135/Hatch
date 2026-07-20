@@ -37,6 +37,22 @@ export interface JobPayload {
   maxAttempts: number;
   createdAt: string;
   lastError?: string;
+  /** ISO timestamp — worker must not run the job before this time. */
+  availableAt?: string;
+}
+
+export function isRateLimitError(err: unknown): boolean {
+  if (err && typeof err === "object" && "code" in err && (err as { code: string }).code === "rate_limited") {
+    return true;
+  }
+  const message = err instanceof Error ? err.message : String(err ?? "");
+  return /rate.?limit|429|SoSoValue rate limited|tokens per day|\bTPD\b/i.test(message);
+}
+
+/** Backoff seconds for rate-limit retries: 60 → 180 → 420 (capped). */
+export function rateLimitBackoffSec(attempts: number): number {
+  const n = Math.max(1, attempts);
+  return Math.min(60 * (1 + n * (n + 1) / 2), 600);
 }
 
 const QUEUE_KEY = "hatch:jobs:queue";
@@ -92,7 +108,13 @@ export async function requeueOrDeadLetter(
   job.attempts += 1;
   job.lastError = message.slice(0, 500);
 
-  if (job.attempts >= job.maxAttempts) {
+  const rateLimited = isRateLimitError(err);
+  // Rate limits get more attempts + delayed availability so we don't hammer APIs.
+  const maxAttempts = rateLimited
+    ? Math.max(job.maxAttempts, 5)
+    : job.maxAttempts;
+
+  if (job.attempts >= maxAttempts) {
     await pushDlq(job);
     await bumpStat("dlq");
     await getPrisma().systemEvent.create({
@@ -104,6 +126,7 @@ export async function requeueOrDeadLetter(
           attempts: job.attempts,
           lastError: job.lastError,
           data: job.data,
+          rateLimited,
         } as Prisma.InputJsonValue,
       },
     });
@@ -114,7 +137,27 @@ export async function requeueOrDeadLetter(
     return "dlq";
   }
 
-  // Simple backoff: leave on queue; worker interval provides delay
+  if (rateLimited) {
+    const delaySec = rateLimitBackoffSec(job.attempts);
+    job.availableAt = new Date(Date.now() + delaySec * 1000).toISOString();
+    await redisLPush(QUEUE_KEY, JSON.stringify(job));
+    await bumpStat("retried");
+    logger.warn(
+      {
+        jobId: job.id,
+        name: job.name,
+        attempts: job.attempts,
+        delaySec,
+        availableAt: job.availableAt,
+        err: message,
+      },
+      "job requeued with rate-limit backoff",
+    );
+    return "requeued";
+  }
+
+  // Transient errors: short stagger so drain loop doesn't tight-loop.
+  job.availableAt = new Date(Date.now() + 5_000 * job.attempts).toISOString();
   await redisLPush(QUEUE_KEY, JSON.stringify(job));
   await bumpStat("retried");
   logger.warn(
